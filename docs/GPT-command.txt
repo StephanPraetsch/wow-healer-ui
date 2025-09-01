@@ -1,0 +1,19 @@
+create a world of warcraft addon that
+* add a clickable configuration so that the addon can be activated (not only in as command `/whui togglesomething` but a ui component)
+* replaces my unit frame with the group view (if I'm in a group or not)
+* the group view must be
+  * interactive: I can click a player or simply hover a player and I can do spells on that player (I can do healing spells)
+  * shows the player name, the hp, the resource (e.g. mana)
+  * highlights a player with white surroundings when there is a debuff that can be dispelled by me
+  * highlights a player with orange surroundings when there is a debuff that causes a lot of damage that needs healer focus
+* removes the quest log on the right side
+* adds a frame on the right side (instead of quest log)
+  * when I'm in a dungeon and shows the level of the key and the name (like `<name of instance> +<level of key>`)
+  * when I'm in a raid and shows which bosses are already dead in the current instance and which bosses are still alive
+  * when I'm in open world then empty
+* the name of the addon is "wow-healer-ui"
+* the author is "Stephan Prätsch"
+* the version is 1.0.0
+* create all necessary files (don't forget wow-healer-ui.toc)
+* structure the code in a good architectural way
+* create and use a new icon for the addon: a green plus that indicates healing
