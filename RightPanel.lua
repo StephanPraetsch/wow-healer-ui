@@ -76,48 +76,6 @@ local function GetActiveKeySecondsText()
     end
 end
 
--- Forces percent (done so far). Always returns number percent and the raw values.
-local function GetForcesPercent()
-    if not C_Scenario or not C_Scenario.GetCriteriaInfo then return 0, 0, 1 end
-    for i=1, 12 do
-        local name, _, _, quantity, totalQuantity = C_Scenario.GetCriteriaInfo(i)
-        if not name then break end
-        if name:find("Forces") or name:find("Enemy Forces") then
-            if not totalQuantity or totalQuantity <= 0 then
-                return 0, quantity or 0, totalQuantity or 1
-            end
-            local pct = (quantity or 0) / totalQuantity * 100
-            return pct, quantity or 0, totalQuantity
-        end
-    end
-    return 0, 0, 1
-end
-
--- Heuristic “current pull” projection
-local function EstimateCurrentPullPercentDelta(totalQuantity)
-    if not totalQuantity or totalQuantity <= 0 then return 0 end
-    if not C_NamePlate or not C_NamePlate.GetNamePlates then return 0 end
-    local plates = C_NamePlate.GetNamePlates()
-    if not plates or #plates == 0 then return 0 end
-
-    local count = 0
-    for _, plate in ipairs(plates) do
-        local unit = plate.namePlateUnitToken
-        if unit and UnitExists(unit) and not UnitIsPlayer(unit) then
-            if UnitAffectingCombat(unit) and UnitCanAttack("player", unit) then
-                if not UnitIsBossMob(unit) then
-                    count = count + 1
-                end
-            end
-        end
-    end
-
-    if count <= 0 then return 0 end
-    local approxPerMobPct = 1.0
-    local delta = math.min(count * approxPerMobPct, 15) -- cap
-    return delta
-end
-
 local function UpdateRaidBosses()
     local name = select(1, GetInstanceInfo())
     local encounters = {}
@@ -172,13 +130,11 @@ local function UpdatePanel()
             SetText("line1", "Remaining: not started")
         end
 
-        -- Done: XX.XX%
-        local pct, quantity, totalQuantity = GetForcesPercent()
-        SetText("line2", string.format("Done: %.2f%%", pct or 0))
+        local progressPercentage = ProgressPercentage()
+        SetText("line2", progressPercentage)
 
         -- Current pull: XX.XX%
-        local delta = EstimateCurrentPullPercentDelta(totalQuantity)
-        SetText("line3", string.format("Current pull: %.2f%%", delta or 0))
+        SetText("line3", "")
 
         SetText("line4", "")
         SetText("line5", "")

@@ -9,4 +9,5 @@ Core.lua
 Config.lua
 MinimapButton.lua
 GroupView.lua
+PullPercentage.lua
 RightPanel.lua
