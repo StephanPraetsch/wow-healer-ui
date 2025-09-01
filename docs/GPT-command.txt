@@ -43,4 +43,4 @@ create a world of warcraft addon that
 * the version is 1.0.0
 * create all necessary files (don't forget wow-healer-ui.toc)
 * structure the code in a good architectural way
-* create and use a new icon for the addon: a green plus that indicates healing
+* use an existing icon for the addon that identifies a healer
