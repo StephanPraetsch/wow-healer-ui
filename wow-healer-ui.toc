@@ -1,15 +1,12 @@
-## Interface: 110200
+## Interface: 100207
 ## Title: wow-healer-ui
-## Notes: Healer-focused UI: group style unit frames, right-side panel, and config UI.
+## Notes: Healer-focused UI: group frames, M+/Raid right panel, minimap config, and quest tracker replacement.
 ## Author: Stephan Prätsch
 ## Version: 1.0.0
-## SavedVariables: WOWHealerUI_DB
-## DefaultState: Enabled
+## SavedVariables: WowHealerUI_DB
 
 Core.lua
 Config.lua
-Utils.lua
-Data/Debuffs.lua
-Frames/UnitButton.lua
-Frames/GroupFrame.lua
-Frames/RightPanel.lua
+MinimapButton.lua
+GroupView.lua
+RightPanel.lua

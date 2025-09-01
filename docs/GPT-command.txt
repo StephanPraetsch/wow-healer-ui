@@ -1,24 +1,37 @@
 create a world of warcraft addon that
 * add a configuration
   * an icon on the minimap that opens the configuration for this addon
-  * add to the configuration an enable/disable of the entire addon
-* replaces my unit frame with the group view (if I'm in a group or not)
-* the group view must be
+  * add to the configuration an enable/disable toggle for the entire addon
+* add a group view
+  * always shown
   * interactive: I can click a player or simply hover a player and I can do spells on that player (I can do healing spells)
-  * shows the player name, the hp, the resource (e.g. mana)
+  * shows the player name, the hp, the resource (e.g. mana), the item level
+  * when I hover a player it's highlighted bright
+  * if in raid: shows and groups regarding the group number
+  * if in mythic: sort tank top, then healer, then the 3 damage dealers
   * highlights a player with white surroundings when there is a debuff that can be dispelled by me
   * highlights a player with orange surroundings when there is a debuff that causes a lot of damage that needs healer focus
-* removes the quest log on the right side
-* adds a frame on the right side (instead of quest log)
+  * make it moveable for SHIFT+LEFT CLICK and save the position when releasing
+* remove the quest log on the right side while the addon is active
+  * take care of the initial state, if the addon is active then remove the quest log
+* add a frame on the right side (instead of quest log)
   * when I'm in a dungeon
-    * show the level of the key
-    * the name of the dungeon (like `<name of instance> +<level of key>`)
-    * the remaining time
-    * the percentage already done
-    * the new percentage including the current pull
-  * when I'm in a raid and shows which bosses are already dead in the current instance and which bosses are still alive
+    * line 1:
+      * if the mythic plus key hasn't started yet: `<name of dungeon>`)
+      * if the mythic plus key has started: `<name of dungeon> +<level of key>`)
+    * line 2: "remaining: <mm:ss>"
+      * the remaining time for the active key
+      * use wow api instead of counting down on your own, see https://github.com/FabysGames/mythicplustimer/tree/master how they did it
+    * line 3: "done: <percentage done with 2 decimal digits>%"
+    * line 4: "current: <percentage done from line 3 plus the percentage of the current pull with 2 decimal digits>%"
+  * when I'm in a raid
+    * show all bosses of the current raid instance
+      * flag dead bosses as dead
+      * flag alive bosses as alive
+      * flag the current boss that we are in a fight as in fight
   * when I'm in open world then empty
-  * place this frame at (-130, -500)
+  * place this frame at (-130, -450) at the right side
+  * make it moveable for SHIFT+LEFT CLICK and save the position when releasing
 * the name of the addon is "wow-healer-ui"
 * the author is "Stephan Prätsch"
 * the version is 1.0.0
