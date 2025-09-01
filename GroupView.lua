@@ -12,6 +12,8 @@ local HILIGHT_COLOR = { r=1, g=1, b=0.2 }
 -- Configuration
 local BUTTON_WIDTH, BUTTON_HEIGHT = 200, 28
 local FONT = "GameFontNormal"
+local H_SPACING, V_SPACING = 8, 4
+local FRAME_PADDING = 6 -- padding inside the surrounding frame
 
 -- Unit sorting helpers
 local function RoleSort(u1, u2)
@@ -54,7 +56,12 @@ end
 local function CreateUnitButton(parent)
     local b = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate,BackdropTemplate")
     b:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
-    b:SetBackdrop({ bgFile="Interface\\Buttons\\WHITE8x8", edgeFile="Interface\\Buttons\\WHITE8x8", edgeSize=1 })
+    b:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+        insets = { left = 0, right = 0, top = 0, bottom = 0 },
+    })
     b:SetBackdropColor(0,0,0,0.5)
     b:SetBackdropBorderColor(0.2,0.2,0.2,1)
 
@@ -196,50 +203,98 @@ local function UpdateUnitButton(b)
 end
 
 local function LayoutGroup(units)
+    -- Hide/reset all buttons
     for _, b in ipairs(UNIT_BUTTONS) do
         b:Hide()
         b.unit = nil
     end
 
-    local idx = 1
+    local nextIndex = 1
+    local contentWidth = 0
+    local contentHeight = 0
+
     if IsInRaid() then
+        -- Build per-group buckets: only keep non-empty ones
         local groups = {}
         for _, unit in ipairs(units) do
             local g = GetRaidGroupIndex(unit)
             groups[g] = groups[g] or {}
             table.insert(groups[g], unit)
         end
-        local col = 0
-        for g=1,8 do
-            local gu = groups[g]
-            if gu and #gu > 0 then
-                table.sort(gu, function(a,b) return (UnitName(a) or "") < (UnitName(b) or "") end)
-                for i, unit in ipairs(gu) do
-                    local b = UNIT_BUTTONS[idx] or CreateUnitButton(ROOT); UNIT_BUTTONS[idx] = b
-                    b.unit = unit
-                    b:ClearAllPoints()
-                    b:SetPoint("TOPLEFT", ROOT, "TOPLEFT", col*(BUTTON_WIDTH+8), -(i-1)*(BUTTON_HEIGHT+4))
-                    UpdateUnitButton(b)
-                    idx = idx + 1
-                end
-                col = col + 1
+
+        -- Gather non-empty groups in order, sort units by name inside each
+        local nonEmptyGroups = {}
+        for g = 1, 8 do
+            if groups[g] and #groups[g] > 0 then
+                table.sort(groups[g], function(a, b) return (UnitName(a) or "") < (UnitName(b) or "") end)
+                table.insert(nonEmptyGroups, g)
             end
         end
+
+        local numCols = #nonEmptyGroups
+        local maxRows = 0
+
+        for colIndex, g in ipairs(nonEmptyGroups) do
+            local gu = groups[g]
+            local rows = #gu
+            if rows > maxRows then maxRows = rows end
+
+            for i, unit in ipairs(gu) do
+                local b = UNIT_BUTTONS[nextIndex] or CreateUnitButton(ROOT); UNIT_BUTTONS[nextIndex] = b
+                b.unit = unit
+                b:ClearAllPoints()
+                -- Offset by padding to place content inside the frame
+                b:SetPoint("TOPLEFT", ROOT, "TOPLEFT",
+                        FRAME_PADDING + (colIndex - 1) * (BUTTON_WIDTH + H_SPACING),
+                        -FRAME_PADDING + -(i - 1) * (BUTTON_HEIGHT + V_SPACING))
+                UpdateUnitButton(b)
+                nextIndex = nextIndex + 1
+            end
+        end
+
+        if numCols > 0 then
+            contentWidth  = numCols * BUTTON_WIDTH + (numCols - 1) * H_SPACING
+        else
+            contentWidth = BUTTON_WIDTH
+        end
+
+        if maxRows > 0 then
+            contentHeight = maxRows * BUTTON_HEIGHT + (maxRows - 1) * V_SPACING
+        else
+            contentHeight = BUTTON_HEIGHT
+        end
     else
+        -- Solo/Party: single column sorted by role
         table.sort(units, RoleSort)
+        local rows = #units
         for i, unit in ipairs(units) do
-            local b = UNIT_BUTTONS[idx] or CreateUnitButton(ROOT); UNIT_BUTTONS[idx] = b
+            local b = UNIT_BUTTONS[nextIndex] or CreateUnitButton(ROOT); UNIT_BUTTONS[nextIndex] = b
             b.unit = unit
             b:ClearAllPoints()
-            b:SetPoint("TOPLEFT", ROOT, "TOPLEFT", 0, -(i-1)*(BUTTON_HEIGHT+4))
+            b:SetPoint("TOPLEFT", ROOT, "TOPLEFT",
+                    FRAME_PADDING,
+                    -FRAME_PADDING + -(i - 1) * (BUTTON_HEIGHT + V_SPACING))
             UpdateUnitButton(b)
-            idx = idx + 1
+            nextIndex = nextIndex + 1
+        end
+
+        contentWidth = BUTTON_WIDTH
+        if rows > 0 then
+            contentHeight = rows * BUTTON_HEIGHT + (rows - 1) * V_SPACING
+        else
+            contentHeight = BUTTON_HEIGHT
         end
     end
 
-    for i=idx, #UNIT_BUTTONS do
+    -- Hide any unused buttons
+    for i = nextIndex, #UNIT_BUTTONS do
         UNIT_BUTTONS[i]:Hide()
     end
+
+    -- Resize ROOT to tightly fit the content plus frame padding and border
+    local totalWidth = contentWidth + FRAME_PADDING * 2
+    local totalHeight = contentHeight + FRAME_PADDING * 2
+    ROOT:SetSize(totalWidth, totalHeight)
 end
 
 local function RefreshAll()
@@ -253,15 +308,63 @@ local function RefreshAll()
     LayoutGroup(units)
 end
 
+-- Optional: Save/restore position helpers
+local function SaveRootPosition()
+    if not ROOT then return end
+    local point, relativeTo, relativePoint, xOfs, yOfs = ROOT:GetPoint(1)
+    WowHealerUI.db = WowHealerUI.db or {}
+    WowHealerUI.db.groupViewPos = { point=point, relativePoint=relativePoint, x=xOfs, y=yOfs }
+end
+
+local function RestoreRootPosition()
+    local pos = WowHealerUI.db and WowHealerUI.db.groupViewPos
+    if pos then
+        ROOT:ClearAllPoints()
+        ROOT:SetPoint(pos.point, UIParent, pos.relativePoint, pos.x, pos.y)
+    else
+        ROOT:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 20, -200)
+    end
+end
+
 function GroupView:OnInit()
     ROOT = CreateFrame("Frame", "WowHealerUIGroupView", UIParent, "BackdropTemplate")
-    ROOT:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 20, -200)
-    ROOT:SetSize(4*(BUTTON_WIDTH+8), 10*(BUTTON_HEIGHT+4))
-    ROOT:SetBackdrop({ bgFile="Interface\\Buttons\\WHITE8x8" })
-    ROOT:SetBackdropColor(0,0,0,0.2)
+    RestoreRootPosition()
+
+    -- Surrounding frame (background + border) around the group view
+    ROOT:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+        insets = { left = 0, right = 0, top = 0, bottom = 0 },
+    })
+    ROOT:SetBackdropColor(0, 0, 0, 0.2)
+    ROOT:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
+    ROOT:Show()
+
+    -- Movable: SHIFT + Left-click drag on ROOT background
     ROOT:SetMovable(true)
     ROOT:EnableMouse(true)
-    ROOT:Show()
+
+    ROOT:SetScript("OnMouseDown", function(self, button)
+        if button == "LeftButton" and IsShiftKeyDown() then
+            self:StartMoving()
+            self.isMoving = true
+        end
+    end)
+    ROOT:SetScript("OnMouseUp", function(self, button)
+        if self.isMoving then
+            self:StopMovingOrSizing()
+            self.isMoving = false
+            SaveRootPosition()
+        end
+    end)
+    ROOT:SetScript("OnHide", function(self)
+        if self.isMoving then
+            self:StopMovingOrSizing()
+            self.isMoving = false
+            SaveRootPosition()
+        end
+    end)
 
     ROOT:RegisterEvent("GROUP_ROSTER_UPDATE")
     ROOT:RegisterEvent("PLAYER_ROLES_ASSIGNED")
@@ -285,28 +388,6 @@ function GroupView:OnInit()
             RefreshAll()
         end
     end)
-
-    ROOT:SetScript("OnMouseDown", function(self, button)
-        if button == "LeftButton" and IsShiftKeyDown() then
-            self:StartMoving()
-            self.isMoving = true
-        end
-    end)
-
-    ROOT:SetScript("OnMouseUp", function(self, button)
-        if self.isMoving then
-            self:StopMovingOrSizing()
-            self.isMoving = false
-        end
-    end)
-
-    ROOT:SetScript("OnHide", function(self)
-        if self.isMoving then
-            self:StopMovingOrSizing()
-            self.isMoving = false
-        end
-    end)
-
 end
 
 function GroupView:OnLogin()
