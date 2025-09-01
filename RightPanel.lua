@@ -188,6 +188,8 @@ function Panel:OnInit()
     FRAME:SetBackdropColor(0,0,0,0.4)
     FRAME:SetBackdropBorderColor(0.2,0.2,0.2,1)
     FRAME:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", anchorX, anchorY)
+    FRAME:SetMovable(true)
+    FRAME:EnableMouse(true)
 
     local y = -12
     local function addLabel(key, font, text, offsetY)
@@ -222,6 +224,28 @@ function Panel:OnInit()
     end)
 
     FRAME:SetScript("OnUpdate", OnFrameUpdate)
+
+    FRAME:SetScript("OnMouseDown", function(self, button)
+        if button == "LeftButton" and IsShiftKeyDown() then
+            self:StartMoving()
+            self.isMoving = true
+        end
+    end)
+
+    FRAME:SetScript("OnMouseUp", function(self, button)
+        if self.isMoving then
+            self:StopMovingOrSizing()
+            self.isMoving = false
+        end
+    end)
+
+    FRAME:SetScript("OnHide", function(self)
+        if self.isMoving then
+            self:StopMovingOrSizing()
+            self.isMoving = false
+        end
+    end)
+
 end
 
 function Panel:OnLogin()

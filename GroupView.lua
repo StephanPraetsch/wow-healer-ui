@@ -259,6 +259,8 @@ function GroupView:OnInit()
     ROOT:SetSize(4*(BUTTON_WIDTH+8), 10*(BUTTON_HEIGHT+4))
     ROOT:SetBackdrop({ bgFile="Interface\\Buttons\\WHITE8x8" })
     ROOT:SetBackdropColor(0,0,0,0.2)
+    ROOT:SetMovable(true)
+    ROOT:EnableMouse(true)
     ROOT:Show()
 
     ROOT:RegisterEvent("GROUP_ROSTER_UPDATE")
@@ -283,6 +285,28 @@ function GroupView:OnInit()
             RefreshAll()
         end
     end)
+
+    ROOT:SetScript("OnMouseDown", function(self, button)
+        if button == "LeftButton" and IsShiftKeyDown() then
+            self:StartMoving()
+            self.isMoving = true
+        end
+    end)
+
+    ROOT:SetScript("OnMouseUp", function(self, button)
+        if self.isMoving then
+            self:StopMovingOrSizing()
+            self.isMoving = false
+        end
+    end)
+
+    ROOT:SetScript("OnHide", function(self)
+        if self.isMoving then
+            self:StopMovingOrSizing()
+            self.isMoving = false
+        end
+    end)
+
 end
 
 function GroupView:OnLogin()
