@@ -183,7 +183,7 @@ end
 
 function Panel:OnInit()
     FRAME = CreateFrame("Frame", "WowHealerUIRightPanel", UIParent, "BackdropTemplate")
-    FRAME:SetSize(320, 220)
+    FRAME:SetSize(250, 150)
     FRAME:SetBackdrop({ bgFile="Interface\\Buttons\\WHITE8x8", edgeFile="Interface\\Buttons\\WHITE8x8", edgeSize=1 })
     FRAME:SetBackdropColor(0,0,0,0.4)
     FRAME:SetBackdropBorderColor(0.2,0.2,0.2,1)
