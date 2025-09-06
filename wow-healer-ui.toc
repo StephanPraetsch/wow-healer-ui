@@ -4,6 +4,7 @@
 ## Author: Stephan Prätsch
 ## Version: 1.0.0
 ## SavedVariables: WowHealerUI_DB
+## OptionalDeps: MythicPlusPull
 
 Core.lua
 Config.lua

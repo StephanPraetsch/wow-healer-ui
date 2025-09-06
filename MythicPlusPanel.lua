@@ -36,7 +36,7 @@ local function IsDungeonFinished()
 end
 
 local function ShouldShowNameplateTexts()
-    return IsMythicPlus() and not IsDungeonFinished()
+    return IsMythicPlus() and not IsDungeonFinished() and WowHealerUI:IsEnabled()
 end
 
 local function GetNPCID(guid)
@@ -88,15 +88,16 @@ local function CreateNameplateText(unit)
         fs:SetFrameLevel(lvl + 10)
     end
 
-    local guid = UnitGUID(unit)
     local npcId = GetNPCID(guid)
-    --local estProg, count = _G.MMPE:GetEstimatedProgress(npcId)
-    local message = string.format("%.2f", 2) .. "%"
+    local estProg, _ = MMPE:GetEstimatedProgress(npcId)
 
     fs:SetScale(1.0)
     fs:SetJustifyH("LEFT")
-    fs:SetText("foo '" .. message .. "' bar")
-    fs:Show()
+    if estProg then
+        local message = string.format("%.2f", estProg) .. "%"
+        fs:SetText("foo '" .. message .. "' bar")
+        fs:Show()
+    end
 
     activeNameplates[unit] = fs
 end
