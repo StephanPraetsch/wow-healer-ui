@@ -18,7 +18,9 @@ local function poolInit(pool)
 end
 
 local function poolReset(pool, fs)
-    if not fs then return end
+    if not fs then
+        return
+    end
     fs:ClearAllPoints()
     fs:SetText("")
     fs:Hide()
@@ -44,7 +46,9 @@ local function ShouldShowNameplateTexts()
 end
 
 local function GetNPCID(guid)
-    if not guid then return nil end
+    if not guid then
+        return nil
+    end
     local targetType, _, _, _, _, npcID = strsplit("-", guid)
     if (targetType == "Creature" or targetType == "Vehicle") and npcID then
         return tonumber(npcID)
@@ -62,12 +66,18 @@ local function RemoveNameplateText(unit)
 end
 
 local function CreateNameplateText(unit)
-    if not (LibGetFrame and LibGetFrame.GetUnitNameplate) then return end
-    if not UnitExists(unit) then return end
+    if not (LibGetFrame and LibGetFrame.GetUnitNameplate) then
+        return
+    end
+    if not UnitExists(unit) then
+        return
+    end
 
     local guid = UnitGUID(unit)
     local npcID = guid and select(6, strsplit("-", guid))
-    if not npcID then return end
+    if not npcID then
+        return
+    end
 
     if activeNameplates[unit] then
         fontStringPool:Release(activeNameplates[unit])
@@ -75,7 +85,9 @@ local function CreateNameplateText(unit)
     end
 
     local plate = LibGetFrame.GetUnitNameplate(unit)
-    if not plate then return end
+    if not plate then
+        return
+    end
 
     local fs = fontStringPool:Acquire()
 
@@ -99,11 +111,34 @@ local function CreateNameplateText(unit)
     fs:SetJustifyH("LEFT")
     if estProg then
         local message = string.format("%.2f", estProg) .. "%"
-        fs:SetText("foo '" .. message .. "' bar")
+        fs:SetText(message)
         fs:Show()
     end
 
     activeNameplates[unit] = fs
+end
+
+local function RefreshAllNameplates()
+    for unit, fs in pairs(activeNameplates) do
+        fontStringPool:Release(fs)
+        activeNameplates[unit] = nil
+    end
+
+    if not ShouldShowNameplateTexts() then
+        return
+    end
+
+    local plates = C_NamePlate and C_NamePlate.GetNamePlates and C_NamePlate.GetNamePlates()
+    if not plates then
+        return
+    end
+
+    for _, plate in ipairs(plates) do
+        local unit = plate.namePlateUnitToken or plate.unit or plate.displayedUnit or plate.unitToken
+        if unit and UnitExists(unit) then
+            CreateNameplateText(unit)
+        end
+    end
 end
 
 local function RunNextFrame(fn)
@@ -125,20 +160,22 @@ end
 -- Update every second to refresh labels if needed
 local accum = 0
 local function OnFrameUpdate(self, elapsed)
-    if not WowHealerUI:IsEnabled() then return end
+    if not WowHealerUI:IsEnabled() then
+        return
+    end
     accum = accum + elapsed
     if accum >= 1 then
         accum = 0
-        -- Update any text if needed
+        RefreshAllNameplates()
     end
 end
 
 function Panel:OnInit()
     FRAME = CreateFrame("Frame", "MythicPlusPanel", UIParent, "BackdropTemplate")
     FRAME:SetSize(250, 150)
-    FRAME:SetBackdrop({ bgFile="Interface\\Buttons\\WHITE8x8", edgeFile="Interface\\Buttons\\WHITE8x8", edgeSize=1 })
-    FRAME:SetBackdropColor(0,0,0,0.4)
-    FRAME:SetBackdropBorderColor(0.2,0.2,0.2,1)
+    FRAME:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+    FRAME:SetBackdropColor(0, 0, 0, 0.4)
+    FRAME:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
     FRAME:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -320, -240)
     FRAME:SetMovable(true)
     FRAME:EnableMouse(true)
