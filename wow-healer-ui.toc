@@ -11,3 +11,4 @@ MinimapButton.lua
 GroupView.lua
 PullPercentage.lua
 RightPanel.lua
+MythicPlusPanel.lua
