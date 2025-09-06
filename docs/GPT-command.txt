@@ -5,16 +5,20 @@ create a world of warcraft addon that
   * the minimap icon is on the outside rim of the minimap and is moveable
 * add a group view
   * always shown
-  * interactive: I can click a player or hover a player and I can do spells on that player by pressing a shortcut button (like a macro with hover)
+  * interactive
+    * if I click a player then they will be in my focus
+    * if I only hover a player and click a shortcut to do spell then the hovered player is the target (like a macro would do with `/cast [@mouseover,help,nodead] Lay on Hands`)
   * shows the player name, the hp, the resource (e.g. mana), the item level
   * dynamic size: depending on how many players are in the group or raid the size adjusts
   * when I hover a player it's highlighted bright
   * if in raid
-    * groups by the group number
-    * sorted by the group number
+    * each group is a column, from left to right
     * main tanks are a separate column
+    * each player has a the background color of its class (e.g. mage is light blue)
   * if in mythic
-    * sort tank top, then healer, then the 3 damage dealers
+    * one column that contains all members
+    * sort from top to bottom: tank, healer, damage dealers
+    * each player has a the background color of its class (e.g. mage is light blue)
   * highlights a player with white surroundings when there is a debuff that can be dispelled by me
   * highlights a player with orange surroundings when there is a debuff that causes a lot of damage that needs healer focus
   * make it moveable for SHIFT+LEFT CLICK and save the position when releasing
@@ -42,5 +46,5 @@ create a world of warcraft addon that
 * the author is "Stephan Prätsch"
 * the version is 1.0.0
 * create all necessary files (don't forget wow-healer-ui.toc)
-* structure the code in a good architectural way
-* use an existing icon for the addon that identifies a healer
+* structure the code in a good software architecture way
+* use the icon for the addon that identifies holy priest
