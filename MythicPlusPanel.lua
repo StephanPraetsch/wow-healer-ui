@@ -9,6 +9,9 @@ local LibGetFrame = LibStub and LibStub('LibGetFrame-1.0')
 local FRAME
 local activeNameplates = {}
 local fontStringPool
+local titleFS
+local activeSecondsFS
+local progressPercentageFS
 
 -- Pool functions (define BEFORE CreateObjectPool, and do not reference FRAME here)
 local function poolInit(pool)
@@ -43,6 +46,10 @@ end
 
 local function ShouldShowNameplateTexts()
     return IsMythicPlus() and not IsDungeonFinished() and WowHealerUI:IsEnabled() and IsMMPELoaded() and not MMPE:ShouldShowNameplateTexts()
+end
+
+local function ShowPanel()
+    return IsMythicPlus() and WowHealerUI:IsEnabled()
 end
 
 local function GetNPCID(guid)
@@ -118,6 +125,103 @@ local function CreateNameplateText(unit)
     activeNameplates[unit] = fs
 end
 
+local function GetActiveKeySecondsText()
+    local _, elapsedTime, _  = GetWorldElapsedTime(1)
+    local current_map_id = C_ChallengeMode.GetActiveChallengeMapID()
+    if not current_map_id then
+        return "not started"
+    end
+    local _, _, max_time = C_ChallengeMode.GetMapUIInfo(current_map_id)
+    local remaining = max_time - elapsedTime
+    if remaining > 0 then
+        return SecondsToClock(remaining) .. " / " .. SecondsToClock(max_time)
+    else
+        return "|cffff2020" .. SecondsToClock(remaining) .. " / " .. SecondsToClock(max_time) .. "|r"
+    end
+end
+
+local function ReadForcesPercent()
+    if type(C_Scenario) ~= "table" or type(C_Scenario.GetCriteriaInfo) ~= "function" then
+        return 0
+    end
+
+    -- Try to find the Enemy Forces criteria; fall back to first with a valid total
+    local quantity, totalQuantity = 0, 1
+    local found = false
+
+    -- Prefer explicit forces criteria
+    for i = 1, 20 do
+        local ok, name, _, _, q, tq = pcall(C_Scenario.GetCriteriaInfo, i)
+        if not ok or not name then break end
+        if type(tq) == "number" and tq > 0 then
+            if type(name) == "string" and (name:find("Enemy Forces") or name:find("Forces")) then
+                quantity = (type(q) == "number" and q) or 0
+                totalQuantity = tq
+                found = true
+                break
+            end
+        end
+    end
+
+    -- Fallback: first criteria with total > 0
+    if not found then
+        for i = 1, 20 do
+            local ok, name, _, _, q, tq = pcall(C_Scenario.GetCriteriaInfo, i)
+            if not ok or not name then break end
+            if type(tq) == "number" and tq > 0 then
+                quantity = (type(q) == "number" and q) or 0
+                totalQuantity = tq
+                break
+            end
+        end
+    end
+
+    if totalQuantity <= 0 then totalQuantity = 1 end
+    local pct = (quantity / totalQuantity) * 100
+    if pct < 0 then pct = 0 end
+    if pct > 100 then pct = 100 end
+    return pct
+end
+
+local function ProgressPercentage()
+    local pct = ReadForcesPercent()
+    return string.format("%.2f%%", pct)
+end
+
+local function GetKeyLevel()
+    if C_ChallengeMode and C_ChallengeMode.GetActiveKeystoneInfo then
+        local level = C_ChallengeMode.GetActiveKeystoneInfo()
+        return tonumber(level)
+    end
+end
+
+local function GetInstanceName()
+    return select(1, GetInstanceInfo())
+end
+
+local function UpdatePanel()
+    if not ShowPanel() then
+        FRAME:Hide()
+        return
+    end
+    FRAME:Show()
+    if IsMythicPlus() then
+        local level = GetKeyLevel()
+        if level and level > 0 then
+            titleFS:SetText(string.format("%s +%d", GetInstanceName(), level))
+            activeSecondsFS:SetText(GetActiveKeySecondsText())
+            progressPercentageFS:SetText(ProgressPercentage())
+        else
+            titleFS:SetText(GetInstanceName())
+        end
+    else
+        titleFS:SetText("")
+        activeSecondsFS:SetText("")
+        progressPercentageFS:SetText("")
+    end
+
+end
+
 local function RefreshAllNameplates()
     for unit, fs in pairs(activeNameplates) do
         fontStringPool:Release(fs)
@@ -167,6 +271,7 @@ local function OnFrameUpdate(self, elapsed)
     if accum >= 1 then
         accum = 0
         RefreshAllNameplates()
+        UpdatePanel()
     end
 end
 
@@ -183,6 +288,20 @@ function Panel:OnInit()
 
     fontStringPool = CreateObjectPool(poolInit, poolReset)
 
+    FRAME:SetScript("OnMouseDown", function(self, button)
+        if button == "LeftButton" and IsShiftKeyDown() then
+            self:StartMoving()
+            self.isMoving = true
+        end
+    end)
+
+    FRAME:SetScript("OnMouseUp", function(self, button)
+        if self.isMoving then
+            self:StopMovingOrSizing()
+            self.isMoving = false
+        end
+    end)
+
     FRAME:RegisterEvent("NAME_PLATE_UNIT_ADDED")
     FRAME:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
     FRAME:SetScript("OnEvent", function(_, event, unit)
@@ -192,5 +311,17 @@ function Panel:OnInit()
             OnRemoveNameplate(unit)
         end
     end)
+
+    titleFS = FRAME:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    titleFS:SetPoint("TOPLEFT", 10, -12)
+    titleFS:SetText("")
+
+    activeSecondsFS = FRAME:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    activeSecondsFS:SetPoint("TOPLEFT", 10, -30)
+    activeSecondsFS:SetText("")
+
+    progressPercentageFS = FRAME:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    progressPercentageFS:SetPoint("TOPLEFT", 10, -48)
+    progressPercentageFS:SetText("")
 
 end
