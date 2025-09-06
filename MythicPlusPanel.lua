@@ -3,10 +3,27 @@ local name, ns = ...
 local Panel = {}
 WowHealerUI:RegisterModule("MythicPlusPanel", Panel)
 
-local LibGetFrame = LibStub('LibGetFrame-1.0');
+local LibGetFrame = LibStub and LibStub('LibGetFrame-1.0')
 
-activeNameplates = {}
-fontStringPool = CreateObjectPool(init, reset) --[[@as ObjectPool<FontString>]]
+-- Locals
+local FRAME
+local activeNameplates = {}
+local fontStringPool
+
+-- Pool functions (define BEFORE CreateObjectPool, and do not reference FRAME here)
+local function poolInit(pool)
+    local fs = UIParent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    fs:Hide()
+    return fs
+end
+
+local function poolReset(pool, fs)
+    if not fs then return end
+    fs:ClearAllPoints()
+    fs:SetText("")
+    fs:Hide()
+    fs:SetParent(UIParent)
+end
 
 local function IsMythicPlus()
     local _, _, difficulty = GetInstanceInfo()
@@ -19,107 +36,92 @@ local function IsDungeonFinished()
 end
 
 local function ShouldShowNameplateTexts()
-    if IsMythicPlus() and not IsDungeonFinished() then
-        return true
-    end
-    return false
+    return IsMythicPlus() and not IsDungeonFinished()
 end
 
 local function GetNPCID(guid)
-    if guid == nil then
-        return nil
-    end
+    if not guid then return nil end
     local targetType, _, _, _, _, npcID = strsplit("-", guid)
-    if targetType == "Creature" or targetType == "Vehicle" and npcID then
+    if (targetType == "Creature" or targetType == "Vehicle") and npcID then
         return tonumber(npcID)
     end
 end
 
-local function CreateNameplateText(unit)
-    local npcID = GetNPCID(UnitGUID(unit))
-    if npcID then
-        if activeNameplates[unit] then
-            RemoveNameplateText(unit)
-        end
-        local nameplate = LibGetFrame.GetUnitNameplate(unit)
-        if nameplate then
-            activeNameplates[unit] = fontStringPool:Acquire()
-            activeNameplates[unit]:SetParent(nameplate)
-            activeNameplates[unit]:SetText("omfg")
-            activeNameplates[unit]:SetScale(1.0)
-        end
+local function RemoveNameplateText(unit)
+    local fs = activeNameplates[unit]
+    if fs then
+        fontStringPool:Release(fs)
+        activeNameplates[unit] = nil
     end
+end
+
+local function CreateNameplateText(unit)
+    if not (LibGetFrame and LibGetFrame.GetUnitNameplate) then return end
+    if not UnitExists(unit) then return end
+
+    local guid = UnitGUID(unit)
+    local npcID = guid and select(6, strsplit("-", guid))
+    if not npcID then return end
+
+    if activeNameplates[unit] then
+        fontStringPool:Release(activeNameplates[unit])
+        activeNameplates[unit] = nil
+    end
+
+    local plate = LibGetFrame.GetUnitNameplate(unit)
+    if not plate then return end
+
+    local fs = fontStringPool:Acquire()
+
+    local parent = plate.UnitFrame or plate
+    fs:SetParent(parent)
+    fs:SetDrawLayer("OVERLAY", 7)
+    fs:SetAlpha(1)
+    fs:SetTextColor(1, 1, 1, 1)
+    fs:ClearAllPoints()
+    fs:SetPoint("LEFT", parent, "RIGHT", 6, 0)
+
+    local lvl = parent.GetFrameLevel and parent:GetFrameLevel() or 0
+    if fs.SetFrameLevel then
+        fs:SetFrameLevel(lvl + 10)
+    end
+
+    fs:SetScale(1.0)
+    fs:SetJustifyH("LEFT")
+    fs:SetText("omfg")
+    fs:Show()
+
+    activeNameplates[unit] = fs
+end
+
+local function RunNextFrame(fn)
+    C_Timer.After(0, fn)
 end
 
 local function OnAddNameplate(unit)
-    print("OnAddNameplate", unit)
     if ShouldShowNameplateTexts() then
         RunNextFrame(function()
             CreateNameplateText(unit)
-            --UpdateNameplateValue(unit)
-            --UpdateNameplatePosition(unit)
         end)
-    end
-end
-
-local function RemoveNameplateText(unit)
-    if activeNameplates[unit] ~= nil then
-        fontStringPool:Release(activeNameplates[unit])
-        activeNameplates[unit] = nil
     end
 end
 
 local function OnRemoveNameplate(unit)
     RemoveNameplateText(unit)
-    activeNameplates[unit] = nil
 end
 
-local function UpdateNameplateValue(unit)
-    print("UpdateNameplateValue", unit)
-    local npcID = GetNPCID(UnitGUID(unit))
-    if npcID then
-        --local estProg, count = self:GetEstimatedProgress(npcID)
-        if count and count > 0 then
-            -- TODO name plate
-            --local message = string.format("%.2f", estProg) .. "%"
-            local message = "sph"
-
-            activeNameplates[unit]:SetText(message)
-            activeNameplates[unit]:Show()
-            return true
-        end
-    end
-    if activeNameplates[unit] then
-        activeNameplates[unit]:SetText("")
-        activeNameplates[unit]:Hide()
-    end
-    return false
-end
-
-local function UpdateNameplateValues()
-    for unit, _ in pairs(activeNameplates) do
-        UpdateNameplateValue(unit)
-    end
-end
-
-local function UpdatePanel()
-    UpdateNameplateValues()
-end
-
--- Update every second in dungeon to keep timer/progress fresh
+-- Update every second to refresh labels if needed
 local accum = 0
 local function OnFrameUpdate(self, elapsed)
     if not WowHealerUI:IsEnabled() then return end
     accum = accum + elapsed
     if accum >= 1 then
         accum = 0
-        UpdatePanel()
+        -- Update any text if needed
     end
 end
 
 function Panel:OnInit()
-    print("init MythicPlusPanel")
-
     FRAME = CreateFrame("Frame", "MythicPlusPanel", UIParent, "BackdropTemplate")
     FRAME:SetSize(250, 150)
     FRAME:SetBackdrop({ bgFile="Interface\\Buttons\\WHITE8x8", edgeFile="Interface\\Buttons\\WHITE8x8", edgeSize=1 })
@@ -130,11 +132,10 @@ function Panel:OnInit()
     FRAME:EnableMouse(true)
     FRAME:SetScript("OnUpdate", OnFrameUpdate)
 
-    -- Register events
+    fontStringPool = CreateObjectPool(poolInit, poolReset)
+
     FRAME:RegisterEvent("NAME_PLATE_UNIT_ADDED")
     FRAME:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-
-    -- Dispatch events
     FRAME:SetScript("OnEvent", function(_, event, unit)
         if event == "NAME_PLATE_UNIT_ADDED" then
             OnAddNameplate(unit)
@@ -143,5 +144,4 @@ function Panel:OnInit()
         end
     end)
 
-    print("init MythicPlusPanel - done")
 end
