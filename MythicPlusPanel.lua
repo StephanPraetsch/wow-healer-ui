@@ -25,6 +25,10 @@ local function poolReset(pool, fs)
     fs:SetParent(UIParent)
 end
 
+local function IsMMPELoaded()
+    return type(_G.MMPE) == "table"
+end
+
 local function IsMythicPlus()
     local _, _, difficulty = GetInstanceInfo()
     return difficulty == 8
@@ -36,7 +40,7 @@ local function IsDungeonFinished()
 end
 
 local function ShouldShowNameplateTexts()
-    return IsMythicPlus() and not IsDungeonFinished() and WowHealerUI:IsEnabled() and not MMPE:ShouldShowNameplateTexts()
+    return IsMythicPlus() and not IsDungeonFinished() and WowHealerUI:IsEnabled() and IsMMPELoaded() and not MMPE:ShouldShowNameplateTexts()
 end
 
 local function GetNPCID(guid)
