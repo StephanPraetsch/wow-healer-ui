@@ -36,7 +36,7 @@ local function IsDungeonFinished()
 end
 
 local function ShouldShowNameplateTexts()
-    return IsMythicPlus() and not IsDungeonFinished() and WowHealerUI:IsEnabled()
+    return IsMythicPlus() and not IsDungeonFinished() and WowHealerUI:IsEnabled() and not MMPE:ShouldShowNameplateTexts()
 end
 
 local function GetNPCID(guid)
