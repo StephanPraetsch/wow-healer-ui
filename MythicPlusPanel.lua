@@ -44,6 +44,8 @@ local function GetNPCID(guid)
     local targetType, _, _, _, _, npcID = strsplit("-", guid)
     if (targetType == "Creature" or targetType == "Vehicle") and npcID then
         return tonumber(npcID)
+    else
+        return "null"
     end
 end
 
@@ -86,9 +88,14 @@ local function CreateNameplateText(unit)
         fs:SetFrameLevel(lvl + 10)
     end
 
+    local guid = UnitGUID(unit)
+    local npcId = GetNPCID(guid)
+    --local estProg, count = _G.MMPE:GetEstimatedProgress(npcId)
+    local message = string.format("%.2f", 2) .. "%"
+
     fs:SetScale(1.0)
     fs:SetJustifyH("LEFT")
-    fs:SetText("omfg")
+    fs:SetText("foo '" .. message .. "' bar")
     fs:Show()
 
     activeNameplates[unit] = fs
