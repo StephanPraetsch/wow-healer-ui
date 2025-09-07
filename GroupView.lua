@@ -11,6 +11,7 @@ local UNIT_BUTTONS = {}
 local BUTTON_WIDTH, BUTTON_HEIGHT = 220, 28
 local H_SPACING, V_SPACING = 8, 4
 local FRAME_PADDING = 6 -- padding inside the surrounding frame
+local HEADER_OFFSET = 18 -- vertical space for the header
 
 -- Sorting by role then name
 local function RoleSort(u1, u2)
@@ -42,7 +43,7 @@ local function GetRaidGroupIndex(unit)
     if not IsInRaid() then return 1 end
     local unitName = UnitName(unit)
     for i=1, GetNumGroupMembers() do
-        local raidName, rank, subgroup = GetRaidRosterInfo(i)
+        local raidName, _, subgroup = GetRaidRosterInfo(i)
         if raidName == unitName then
             return subgroup or 1
         end
@@ -58,6 +59,16 @@ local function GetUnitIlvl(unit)
         end
     end
     return nil
+end
+
+local function GetGroupTitle()
+    if IsInRaid() then
+        return "raid"
+    elseif IsInGroup() then
+        return "group"
+    else
+        return "solo"
+    end
 end
 
 local function CreateUnitButton(parent)
@@ -160,7 +171,7 @@ local function CreateUnitButton(parent)
         if ROOT.isMoving then
             ROOT:StopMovingOrSizing()
             ROOT.isMoving = false
-            local point, relativeTo, relativePoint, xOfs, yOfs = ROOT:GetPoint(1)
+            local point, _, relativePoint, xOfs, yOfs = ROOT:GetPoint(1)
             WowHealerUI.DB.groupView = WowHealerUI.DB.groupView or {}
             WowHealerUI.DB.groupView.pos = { point=point, rel="UIParent", relPoint=relativePoint, x=xOfs, y=yOfs }
         end
@@ -272,7 +283,7 @@ local function LayoutGroup(units)
                 b:ClearAllPoints()
                 b:SetPoint("TOPLEFT", ROOT, "TOPLEFT",
                         FRAME_PADDING + (colIndex - 1) * (BUTTON_WIDTH + H_SPACING),
-                        -FRAME_PADDING + -(i - 1) * (BUTTON_HEIGHT + V_SPACING))
+                        -(FRAME_PADDING + HEADER_OFFSET) + -(i - 1) * (BUTTON_HEIGHT + V_SPACING))
                 UpdateUnitButton(b)
                 nextIndex = nextIndex + 1
             end
@@ -290,7 +301,7 @@ local function LayoutGroup(units)
             b:ClearAllPoints()
             b:SetPoint("TOPLEFT", ROOT, "TOPLEFT",
                     FRAME_PADDING,
-                    -FRAME_PADDING + -(i - 1) * (BUTTON_HEIGHT + V_SPACING))
+                    -(FRAME_PADDING + HEADER_OFFSET) + -(i - 1) * (BUTTON_HEIGHT + V_SPACING))
             UpdateUnitButton(b)
             nextIndex = nextIndex + 1
         end
@@ -302,7 +313,7 @@ local function LayoutGroup(units)
     end
 
     local totalWidth = contentWidth + FRAME_PADDING * 2
-    local totalHeight = contentHeight + FRAME_PADDING * 2
+    local totalHeight = contentHeight + FRAME_PADDING * 2 + HEADER_OFFSET
     ROOT:SetSize(totalWidth, totalHeight)
 end
 
@@ -313,6 +324,12 @@ local function RefreshAll()
         return
     end
     ROOT:Show()
+
+    -- Update header
+    if ROOT.headerFS then
+        ROOT.headerFS:SetText(GetGroupTitle())
+    end
+
     local units = BuildUnitList()
     LayoutGroup(units)
 end
@@ -331,6 +348,13 @@ function GroupView:OnInit()
     ROOT:SetMovable(true)
     ROOT:EnableMouse(true)
 
+    -- Header title
+    local headerFS = ROOT:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    headerFS:SetPoint("TOPLEFT", 8, -6)
+    headerFS:SetText("")
+    ROOT.headerFS = headerFS
+
+    -- Restore position
     local pos = WowHealerUI.DB and WowHealerUI.DB.groupView and WowHealerUI.DB.groupView.pos
     if pos then
         ROOT:ClearAllPoints()
@@ -339,6 +363,7 @@ function GroupView:OnInit()
         ROOT:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 20, -200)
     end
 
+    -- Drag the whole panel with Shift+Left on the background
     ROOT:SetScript("OnMouseDown", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() then
             self:StartMoving()
@@ -349,7 +374,7 @@ function GroupView:OnInit()
         if self.isMoving then
             self:StopMovingOrSizing()
             self.isMoving = false
-            local point, relativeTo, relativePoint, xOfs, yOfs = self:GetPoint(1)
+            local point, _, relativePoint, xOfs, yOfs = self:GetPoint(1)
             WowHealerUI.DB.groupView = WowHealerUI.DB.groupView or {}
             WowHealerUI.DB.groupView.pos = { point=point, rel="UIParent", relPoint=relativePoint, x=xOfs, y=yOfs }
         end
