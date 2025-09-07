@@ -71,6 +71,13 @@ local function GetGroupTitle()
     end
 end
 
+-- Map UnitGroupRolesAssigned() to role icon texcoords in UI-LFG-RoleIcons
+local ROLE_TEXCOORDS = {
+    TANK   = { left=0.5,  right=0.75, top=0.0,  bottom=0.25 },
+    HEALER = { left=0.75, right=1.0,  top=0.0,  bottom=0.25 },
+    DAMAGER= { left=0.25, right=0.5,  top=0.0,  bottom=0.25 },
+}
+
 local function CreateUnitButton(parent)
     local b = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate,BackdropTemplate")
     b:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
@@ -117,9 +124,16 @@ local function CreateUnitButton(parent)
     hpFill:SetColorTexture(0.2, 0.8, 0.2, 0.95)
     b.hpFill = hpFill
 
-    -- Name + iLvl centered within HP bar
+    -- Role icon (left side of the HP bar)
+    local roleTex = b:CreateTexture(nil, "OVERLAY")
+    roleTex:SetSize(14, 14)
+    roleTex:SetPoint("LEFT", hpBG, "LEFT", 2, 0)
+    roleTex:SetTexture("Interface\\LFGFrame\\UI-LFG-RoleIcons")
+    b.roleTex = roleTex
+
+    -- Name + iLvl within HP bar
     local nameFS = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    nameFS:SetPoint("CENTER", hpBG, "CENTER", 0, 0)
+    nameFS:SetPoint("LEFT", roleTex, "RIGHT", 3, 0)
     nameFS:SetText("")
     b.nameFS = nameFS
 
@@ -180,6 +194,17 @@ local function CreateUnitButton(parent)
     return b
 end
 
+local function UpdateRoleIcon(b, unit)
+    local role = UnitGroupRolesAssigned(unit)
+    if role and ROLE_TEXCOORDS[role] then
+        local tc = ROLE_TEXCOORDS[role]
+        b.roleTex:Show()
+        b.roleTex:SetTexCoord(tc.left, tc.right, tc.top, tc.bottom)
+    else
+        b.roleTex:Hide()
+    end
+end
+
 local function UpdateUnitButton(b)
     local unit = b.unit
     if not unit or not UnitExists(unit) then
@@ -193,6 +218,9 @@ local function UpdateUnitButton(b)
     local r,g,bl = WowHealerUI:GetClassColor(unit)
     b.classBG:SetColorTexture(r, g, bl, 0.20)
     b.hpFill:SetColorTexture(r * 0.85, g * 0.85, bl * 0.85, 0.95)
+
+    -- Role icon
+    UpdateRoleIcon(b, unit)
 
     -- Name and iLvl in the HP bar
     local name = UnitName(unit) or "Unknown"
