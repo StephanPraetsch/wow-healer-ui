@@ -13,6 +13,8 @@ local titleFS
 local activeSecondsFS
 local progressPercentageFS
 
+local percentString = '%.2f%%';
+
 -- Pool functions (define BEFORE CreateObjectPool, and do not reference FRAME here)
 local function poolInit(pool)
     local fs = UIParent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -210,7 +212,18 @@ local function UpdatePanel()
         if level and level > 0 then
             titleFS:SetText(string.format("%s +%d", GetInstanceName(), level))
             activeSecondsFS:SetText(GetActiveKeySecondsText())
-            progressPercentageFS:SetText(ProgressPercentage())
+            if IsMMPELoaded() then
+                local current = MMPE:GetCurrentQuantity()
+                local pull = MMPE:GetPulledProgress()
+                local total = (current + pull)
+                local max = MMPE:GetMaxQuantity()
+                local currentPct = percentString:format((current / max) * 100)
+                local pullPct = percentString:format((pull / max) * 100)
+                local totalPct = percentString:format((total / max) * 100)
+                progressPercentageFS:SetText(currentPct .. " + " .. pullPct .. " = " .. totalPct)
+            else
+                progressPercentageFS:SetText(ProgressPercentage())
+            end
         else
             titleFS:SetText(GetInstanceName())
         end
@@ -277,7 +290,7 @@ end
 
 function Panel:OnInit()
     FRAME = CreateFrame("Frame", "MythicPlusPanel", UIParent, "BackdropTemplate")
-    FRAME:SetSize(250, 150)
+    FRAME:SetSize(250, 100)
     FRAME:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
     FRAME:SetBackdropColor(0, 0, 0, 0.4)
     FRAME:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
