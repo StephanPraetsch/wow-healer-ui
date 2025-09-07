@@ -319,6 +319,25 @@ local function CreateUnitButton(parent)
     rightFS:SetText("")
     b.rightFS = rightFS
 
+    -- Dispellable debuff counter (small square + count)
+    local dispFrame = CreateFrame("Frame", nil, b)
+    dispFrame:SetSize(16, 16)
+    dispFrame:SetPoint("RIGHT", b.hpBG, "RIGHT", -2, 0)
+    dispFrame:Hide()
+    b.dispFrame = dispFrame
+
+    local dispTex = dispFrame:CreateTexture(nil, "OVERLAY")
+    dispTex:SetAllPoints(true)
+    -- Default to a generic debuff-looking square; we’ll color by type
+    dispTex:SetTexture("Interface\\Buttons\\WHITE8x8")
+    dispTex:SetVertexColor(0.6, 0, 0, 0.9) -- red-ish default
+    b.dispTex = dispTex
+
+    local dispCountFS = dispFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    dispCountFS:SetPoint("CENTER", dispFrame, "CENTER", 0, 0)
+    dispCountFS:SetText("")
+    b.dispCountFS = dispCountFS
+
     -- Resource bar
     local resBar = CreateFrame("StatusBar", nil, b)
     resBar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
@@ -383,6 +402,122 @@ local function UpdateRoleIcon(b, unit)
         b.roleTex:SetTexture(nil)
         b.roleTex:Hide()
     end
+end
+
+-- 1) Iterator
+local function ForEachDebuff(unit, cb)
+    print("ITER for", unit, "C_UnitAuras?", C_UnitAuras and "yes" or "no",
+            "GetDebuffDataByIndex?", C_UnitAuras and (C_UnitAuras.GetDebuffDataByIndex and "yes" or "no") or "n/a")
+    if C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex then
+        print("PATH: C_UnitAuras")
+        for i = 1, 40 do
+            local aura = C_UnitAuras.GetDebuffDataByIndex(unit, i)
+            if not aura or not aura.name then break end
+            local name       = aura.name
+            local icon       = aura.icon
+            local count      = aura.applications or aura.charges or aura.stackCount or 0
+            local dispelType = aura.dispelName  -- IMPORTANT on Retail
+            local duration   = aura.duration
+            local expires    = aura.expirationTime
+            local spellId    = aura.spellId
+            local bossAura   = aura.isBossAura
+            local continue = cb(name, icon, count, dispelType, duration, expires, spellId, bossAura, aura)
+            print("DBG", UnitName(unit), name, spellId, "dispelType=", tostring(dispelType), continue)
+            if continue == false then break end
+        end
+        return
+    end
+
+    if UnitDebuff then
+        print("PATH: UnitDebuff")
+        for i = 1, 40 do
+            local name, icon, count, dispelType, duration, expires, caster, isStealable, nameplateShowPersonal, spellId =
+            UnitDebuff(unit, i)
+            if not name then break end
+            local continue = cb(name, icon, count or 0, dispelType, duration, expires, spellId, false, nil)
+            if continue == false then break end
+        end
+    else
+        print("PATH: none")
+    end
+end
+
+-- Colors for known dispel types; nil type gets neutral
+local DEBUFF_COLORS = {
+    Magic   = {0.2, 0.6, 1.0},
+    Curse   = {0.6, 0.2, 1.0},
+    Disease = {0.6, 0.9, 0.2},
+    Poison  = {0.0, 0.9, 0.4},
+    NONE    = {0.8, 0.2, 0.2}, -- neutral red-ish for non-dispellable/unknown
+}
+
+-- Count ALL debuffs on unit. If any has a dispel type, use the first one for color.
+local function GetAllDebuffCountAndColor(unit)
+    if not unit or not UnitExists(unit) then return 0, unpack(DEBUFF_COLORS.NONE) end
+
+    local total = 0
+    local reprType = nil
+
+    if C_UnitAuras and C_UnitAuras.GetDebuffDataByIndex then
+        for i=1,40 do
+            local a = C_UnitAuras.GetDebuffDataByIndex(unit, i)
+            if not a or not a.name then break end
+            total = total + 1
+            if not reprType and a.dispelName then
+                reprType = a.dispelName
+            end
+        end
+    elseif UnitDebuff then
+        for i=1,40 do
+            local name, _, _, dispelType = UnitDebuff(unit, i)
+            if not name then break end
+            total = total + 1
+            if not reprType and dispelType then
+                reprType = dispelType
+            end
+        end
+    end
+
+    local c = DEBUFF_COLORS[reprType or "NONE"] or DEBUFF_COLORS.NONE
+    return total, c[1], c[2], c[3]
+end
+
+-- 2) Counter
+local DISPEL_COLORS = {
+    Magic   = {0.2, 0.6, 1.0},
+    Curse   = {0.6, 0.2, 1.0},
+    Disease = {0.6, 0.9, 0.2},
+    Poison  = {0.0, 0.9, 0.4},
+}
+
+local CLASS_DISPELS = {
+    PRIEST  = { Magic=true, Disease=true },
+    SHAMAN  = { Magic=true, Curse=true },
+    PALADIN = { Magic=true, Disease=true, Poison=true },
+    DRUID   = { Magic=true, Curse=true, Poison=true },
+    MONK    = { Magic=true, Disease=true, Poison=true },
+    EVOKER  = { Magic=true, Curse=true, Poison=true },
+}
+
+local function GetDispellableCountAndColor(unit)
+    if not unit or not UnitExists(unit) then return 0 end
+    local _, playerClass = UnitClass("player")
+    local allowed = CLASS_DISPELS[playerClass or ""]
+    if not allowed then return 0 end
+
+    local total, reprType = 0, nil
+    ForEachDebuff(unit, function(_, _, _, dispelType)
+        if dispelType and allowed[dispelType] then
+            total = total + 1
+            reprType = reprType or dispelType
+        end
+    end)
+
+    if total > 0 and reprType and DISPEL_COLORS[reprType] then
+        local c = DISPEL_COLORS[reprType]
+        return total, c[1], c[2], c[3]
+    end
+    return total, 0.6, 0.0, 0.0
 end
 
 local function UpdateUnitButton(b)
@@ -496,6 +631,18 @@ local function UpdateUnitButton(b)
     -- Secure attribute for mouseover/target/focus
     b:SetAttribute("unit", unit)
 
+    -- Debuff indicator: show count of ALL debuffs; color by type if present, else neutral
+    if b.dispFrame and b.dispTex and b.dispCountFS then
+        local cnt, cr, cg, cb = GetAllDebuffCountAndColor(unit)
+        if cnt and cnt > 0 then
+            b.dispTex:SetVertexColor(cr, cg, cb, 0.95)
+            b.dispCountFS:SetText(tostring(cnt))
+            b.dispFrame:Show()
+        else
+            b.dispFrame:Hide()
+        end
+    end
+
     -- Grey out when out of range (initial/event-driven application)
     local inRange = IsUnitInRange(unit)
     local alphaIn, alphaOut = 1.0, 0.45
@@ -510,6 +657,7 @@ local function UpdateUnitButton(b)
         if b.roleTex then b.roleTex:SetAlpha(1) end
         if b.absorbFill then b.absorbFill:SetAlpha(0.55) end
         if b.absorbEdge then b.absorbEdge:SetAlpha(0.7) end
+        if b.dispFrame then b.dispFrame:SetAlpha(1) end
     else
         b:SetAlpha(alphaOut)
         b.nameFS:SetTextColor(0.7, 0.7, 0.7)
@@ -520,6 +668,7 @@ local function UpdateUnitButton(b)
         if b.roleTex then b.roleTex:SetAlpha(0.6) end
         if b.absorbFill then b.absorbFill:SetAlpha(0.35) end
         if b.absorbEdge then b.absorbEdge:SetAlpha(0.45) end
+        if b.dispFrame then b.dispFrame:SetAlpha(0.7) end
     end
 end
 
@@ -673,9 +822,16 @@ function GroupView:OnInit()
     ROOT:RegisterEvent("UNIT_POWER_UPDATE")
     ROOT:RegisterEvent("UNIT_MAXPOWER")
     ROOT:RegisterEvent("UNIT_INVENTORY_CHANGED")
+    ROOT:RegisterEvent("UNIT_AURA")
 
     ROOT:SetScript("OnEvent", function(self, event, arg1)
         if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_POWER_UPDATE" or event == "UNIT_MAXPOWER" then
+            for _, b in ipairs(UNIT_BUTTONS) do
+                if b:IsShown() and b.unit == arg1 then
+                    UpdateUnitButton(b)
+                end
+            end
+        elseif event == "UNIT_AURA" then
             for _, b in ipairs(UNIT_BUTTONS) do
                 if b:IsShown() and b.unit == arg1 then
                     UpdateUnitButton(b)
