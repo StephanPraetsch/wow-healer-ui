@@ -8,20 +8,27 @@ create a world of warcraft addon that
   * interactive
     * if I click a player then they will be in my focus
     * if I only hover a player and click a shortcut to do spell then the hovered player is the target (like a macro would do with `/cast [@mouseover,help,nodead] Lay on Hands`)
-  * shows the player name, the hp, the resource (e.g. mana), the item level
+  * one player cell contains
+    * the player name
+    * the hp very present (like 80%)
+    * the resource (e.g. mana) not that present (like 20%)
+    * the item level
+    * the cell background color of its class (e.g. mage is light blue)
   * dynamic size: depending on how many players are in the group or raid the size adjusts
   * when I hover a player it's highlighted bright
+  * if not in a group nor raid then display only me with header "solo"
   * if in raid
+    * header "raid"
     * each group is a column, from left to right
+    * each group has the group header with "group <group number>"
     * main tanks are a separate column
-    * each player has a the background color of its class (e.g. mage is light blue)
   * if in mythic
+    * header "group"
     * one column that contains all members
     * sort from top to bottom: tank, healer, damage dealers
-    * each player has a the background color of its class (e.g. mage is light blue)
+  * make it moveable for SHIFT+LEFT CLICK and save the position when releasing
   * highlights a player with white surroundings when there is a debuff that can be dispelled by me
   * highlights a player with orange surroundings when there is a debuff that causes a lot of damage that needs healer focus
-  * make it moveable for SHIFT+LEFT CLICK and save the position when releasing
 * remove the quest log on the right side while the addon is active
   * take care of the initial state, if the addon is active then remove the quest log
 * add a frame on the right side (instead of quest log)
