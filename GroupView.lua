@@ -78,6 +78,57 @@ local ROLE_TEXCOORDS = {
     DAMAGER= { left=0.25, right=0.5,  top=0.0,  bottom=0.25 },
 }
 
+-- Raider.IO helpers
+local function GetUnitFullName(unit)
+    local name, realm = UnitName(unit)
+    if not name then return nil end
+    if not realm or realm == "" then
+        realm = GetRealmName()
+    end
+    return name.."-"..realm:gsub("%s+", "")
+end
+
+local function GetRaiderIOScore(unit)
+    -- Return numeric score or nil if not available
+    if not _G.RaiderIO then return nil end
+
+    -- Preferred API variants (different RaiderIO versions expose different helpers)
+    if type(RaiderIO.GetScore) == "function" then
+        local ok, score = pcall(RaiderIO.GetScore, unit)
+        if ok and type(score) == "number" then return score end
+    end
+
+    if type(RaiderIO.GetProfile) == "function" then
+        -- Try unit directly
+        local ok, profile = pcall(RaiderIO.GetProfile, unit)
+        if ok and type(profile) == "table" and type(profile.mythicKeystoneProfile) == "table" then
+            local score = profile.mythicKeystoneProfile and profile.mythicKeystoneProfile.currentScore
+            if type(score) == "number" then return score end
+        end
+        -- Try name-realm lookup
+        local fullname = GetUnitFullName(unit)
+        if fullname then
+            local ok2, profile2 = pcall(RaiderIO.GetProfile, fullname)
+            if ok2 and type(profile2) == "table" and type(profile2.mythicKeystoneProfile) == "table" then
+                local score2 = profile2.mythicKeystoneProfile and profile2.mythicKeystoneProfile.currentScore
+                if type(score2) == "number" then return score2 end
+            end
+        end
+    end
+
+    -- Some versions use a global cache table; avoid hard-depending on it
+    -- If you want a very loose fallback, uncomment below at your own risk.
+    -- local fullname = GetUnitFullName(unit)
+    -- if fullname and RaiderIO and RaiderIO.raiderIOProfileCache and RaiderIO.raiderIOProfileCache[fullname] then
+    --     local p = RaiderIO.raiderIOProfileCache[fullname]
+    --     if p and p.mythicKeystoneProfile and type(p.mythicKeystoneProfile.currentScore) == "number" then
+    --         return p.mythicKeystoneProfile.currentScore
+    --     end
+    -- end
+
+    return nil
+end
+
 local function CreateUnitButton(parent)
     local b = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate,BackdropTemplate")
     b:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
@@ -131,16 +182,17 @@ local function CreateUnitButton(parent)
     roleTex:SetTexture("Interface\\LFGFrame\\UI-LFG-RoleIcons")
     b.roleTex = roleTex
 
-    -- Name + iLvl within HP bar
+    -- Name inside HP bar (left, after role)
     local nameFS = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     nameFS:SetPoint("LEFT", roleTex, "RIGHT", 3, 0)
     nameFS:SetText("")
     b.nameFS = nameFS
 
-    local ilvlFS = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ilvlFS:SetPoint("RIGHT", hpBG, "RIGHT", -4, 0)
-    ilvlFS:SetText("")
-    b.ilvlFS = ilvlFS
+    -- Right side text inside HP bar: "<ilvl> <rio>"
+    local rightFS = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    rightFS:SetPoint("RIGHT", hpBG, "RIGHT", -4, 0)
+    rightFS:SetText("")
+    b.rightFS = rightFS
 
     -- 3) Resource bar: thin strip below HP bar
     local resBar = CreateFrame("StatusBar", nil, b)
@@ -222,13 +274,18 @@ local function UpdateUnitButton(b)
     -- Role icon
     UpdateRoleIcon(b, unit)
 
-    -- Name and iLvl in the HP bar
+    -- Name
     local name = UnitName(unit) or "Unknown"
-    local ilvl = GetUnitIlvl(unit)
     b.nameFS:SetText(name)
     b.nameFS:SetTextColor(1,1,1)
-    b.ilvlFS:SetText(ilvl and tostring(ilvl) or "")
-    b.ilvlFS:SetTextColor(1,1,1)
+
+    -- Right text: ilvl and rio
+    local ilvl = GetUnitIlvl(unit)
+    local rio = GetRaiderIOScore(unit)
+    local ilvlText = ilvl and tostring(ilvl) or "-"
+    local rioText = rio and tostring(math.floor(rio + 0.5)) or "-"
+    b.rightFS:SetText(ilvlText .. "  " .. rioText)
+    b.rightFS:SetTextColor(1,1,1)
 
     -- Health as width fill percent
     local hp = UnitHealth(unit) or 0
@@ -254,9 +311,9 @@ local function UpdateUnitButton(b)
     b.resBar:SetMinMaxValues(0,1)
     b.resBar:SetValue(pPerc)
     if ptype == 0 then
-        b.resBar:SetStatusBarColor(0.1,0.4,1.0) -- mana
+        b.resBar.SetStatusBarColor(b.resBar, 0.1, 0.4, 1.0) -- mana
     else
-        b.resBar:SetStatusBarColor(0.9,0.8,0.2) -- other resources
+        b.resBar.SetStatusBarColor(b.resBar, 0.9, 0.8, 0.2) -- other resources
     end
 
     -- Border alerts
