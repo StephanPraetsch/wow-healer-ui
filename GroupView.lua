@@ -141,8 +141,7 @@ local function CreateUnitButton(parent)
 
     b:RegisterForClicks("AnyDown")
     -- Interactions
-    b:SetAttribute("*type1", "focus")  -- Left click: focus
-    b:SetAttribute("*type2", "target") -- Right click: target
+    b:SetAttribute("*type1", "target")  -- Left click: focus
     b:SetAttribute("unit", nil)
 
     -- Layered visuals
