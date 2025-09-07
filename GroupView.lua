@@ -62,8 +62,13 @@ local function CreateUnitButton(parent)
         edgeSize = 1,
         insets = { left = 0, right = 0, top = 0, bottom = 0 },
     })
-    b:SetBackdropColor(0,0,0,0.5)
+    b:SetBackdropColor(0,0,0,0)
     b:SetBackdropBorderColor(0.2,0.2,0.2,1)
+
+    local classBG = b:CreateTexture(nil, "BACKGROUND", nil, -8)
+    classBG:SetAllPoints(true)
+    classBG:SetColorTexture(1, 1, 1, 1)
+    b.classBG = classBG
 
     b:RegisterForClicks("AnyDown")
 
@@ -132,11 +137,15 @@ local function UpdateUnitButton(b)
 
     b:Show()
 
-    -- Class color name
     local r,g,bl = WowHealerUI:GetClassColor(unit)
+    if b.classBG then
+        b.classBG:SetColorTexture(r, g, bl, 1)
+    end
+
+    -- Name in white for readability
     local name = UnitName(unit) or "Unknown"
     b.nameFS:SetText(name)
-    b.nameFS:SetTextColor(r,g,bl)
+    b.nameFS:SetTextColor(1,1,1)
 
     -- Health
     local hp = UnitHealth(unit)
