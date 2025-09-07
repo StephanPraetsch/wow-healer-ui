@@ -89,23 +89,19 @@ local function GetUnitFullName(unit)
 end
 
 local function GetRaiderIOScore(unit)
-    -- Return numeric score or nil if not available
     if not _G.RaiderIO then return nil end
 
-    -- Preferred API variants (different RaiderIO versions expose different helpers)
     if type(RaiderIO.GetScore) == "function" then
         local ok, score = pcall(RaiderIO.GetScore, unit)
         if ok and type(score) == "number" then return score end
     end
 
     if type(RaiderIO.GetProfile) == "function" then
-        -- Try unit directly
         local ok, profile = pcall(RaiderIO.GetProfile, unit)
         if ok and type(profile) == "table" and type(profile.mythicKeystoneProfile) == "table" then
             local score = profile.mythicKeystoneProfile and profile.mythicKeystoneProfile.currentScore
             if type(score) == "number" then return score end
         end
-        -- Try name-realm lookup
         local fullname = GetUnitFullName(unit)
         if fullname then
             local ok2, profile2 = pcall(RaiderIO.GetProfile, fullname)
@@ -116,17 +112,18 @@ local function GetRaiderIOScore(unit)
         end
     end
 
-    -- Some versions use a global cache table; avoid hard-depending on it
-    -- If you want a very loose fallback, uncomment below at your own risk.
-    -- local fullname = GetUnitFullName(unit)
-    -- if fullname and RaiderIO and RaiderIO.raiderIOProfileCache and RaiderIO.raiderIOProfileCache[fullname] then
-    --     local p = RaiderIO.raiderIOProfileCache[fullname]
-    --     if p and p.mythicKeystoneProfile and type(p.mythicKeystoneProfile.currentScore) == "number" then
-    --         return p.mythicKeystoneProfile.currentScore
-    --     end
-    -- end
-
     return nil
+end
+
+-- Colorize score like Raider.IO gradient. Thresholds approximate typical brackets.
+-- Gray < Green < Blue < Purple < Orange
+local function ColorForRio(score)
+    if not score or score <= 0 then return 0.7, 0.7, 0.7 end           -- gray
+    if score < 1000 then return 0.2, 1.0, 0.2 end                       -- green
+    if score < 1500 then return 0.2, 0.6, 1.0 end                       -- blue
+    if score < 2200 then return 0.7, 0.4, 1.0 end                        -- purple (~2064 lands here)
+    -- high
+    return 1.0, 0.6, 0.2                                                -- orange
 end
 
 local function CreateUnitButton(parent)
@@ -279,13 +276,24 @@ local function UpdateUnitButton(b)
     b.nameFS:SetText(name)
     b.nameFS:SetTextColor(1,1,1)
 
-    -- Right text: ilvl and rio
+    -- Right text: ilvl and rio (with colored rio)
     local ilvl = GetUnitIlvl(unit)
     local rio = GetRaiderIOScore(unit)
     local ilvlText = ilvl and tostring(ilvl) or "-"
     local rioText = rio and tostring(math.floor(rio + 0.5)) or "-"
     b.rightFS:SetText(ilvlText .. "  " .. rioText)
-    b.rightFS:SetTextColor(1,1,1)
+
+    if rio then
+        local cr, cg, cb = ColorForRio(rio)
+        -- color only the rio portion using inline color codes
+        -- Build as "|cAARRGGBB<ilvl>|r  |cAARRGGBB<rio>|r"
+        local function hex(x) return string.format("%02X", math.floor(x * 255 + 0.5)) end
+        local colRio = "|cff" .. hex(cr) .. hex(cg) .. hex(cb) .. rioText .. "|r"
+        local colIlvl = "|cffffffff" .. ilvlText .. "|r"
+        b.rightFS:SetText(colIlvl .. "  " .. colRio)
+    else
+        b.rightFS:SetTextColor(1,1,1)
+    end
 
     -- Health as width fill percent
     local hp = UnitHealth(unit) or 0
@@ -311,9 +319,9 @@ local function UpdateUnitButton(b)
     b.resBar:SetMinMaxValues(0,1)
     b.resBar:SetValue(pPerc)
     if ptype == 0 then
-        b.resBar.SetStatusBarColor(b.resBar, 0.1, 0.4, 1.0) -- mana
+        b.resBar:SetStatusBarColor(0.1,0.4,1.0) -- mana
     else
-        b.resBar.SetStatusBarColor(b.resBar, 0.9, 0.8, 0.2) -- other resources
+        b.resBar:SetStatusBarColor(0.9,0.8,0.2) -- other resources
     end
 
     -- Border alerts
