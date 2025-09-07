@@ -9,5 +9,6 @@
 Core.lua
 Config.lua
 MinimapButton.lua
+ItemLevel.lua
 GroupView.lua
 MythicPlusPanel.lua

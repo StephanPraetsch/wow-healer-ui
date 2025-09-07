@@ -167,16 +167,9 @@ local function GetRaidGroupIndex(unit)
     return 1
 end
 
--- ============================================================
--- Item level (player-only native; others show "-" unless you add inspect)
--- ============================================================
 local function GetUnitIlvl(unit)
-    if UnitIsUnit(unit, "player") and GetAverageItemLevel then
-        local overall, equipped = GetAverageItemLevel()
-        if equipped and equipped > 0 then
-            return math.floor(equipped + 0.5)
-        end
-    end
+    local ilvl = WowHealerUI.ItemLevel and WowHealerUI.ItemLevel:GetIlvl(unit)
+    if ilvl then return math.floor(ilvl + 0.5) end
     return nil
 end
 
