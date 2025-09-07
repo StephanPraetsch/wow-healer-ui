@@ -201,7 +201,7 @@ local function CreateUnitButton(parent)
     local resBG = b:CreateTexture(nil, "ARTWORK", nil, -6)
     resBG:SetPoint("TOPLEFT", resBar, "TOPLEFT", 0, 0)
     resBG:SetPoint("BOTTOMRIGHT", resBar, "BOTTOMRIGHT", 0, 0)
-    resBG:SetColorTexture(0,0,0,0.35)
+    resBG:SetColorTexture(0,0,0,1)
     b.resBar = resBar
 
     -- Hover highlight
