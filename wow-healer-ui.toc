@@ -4,10 +4,10 @@
 ## Author: Stephan Prätsch
 ## Version: 1.0.0
 ## SavedVariables: WowHealerUI_DB
+## OptionalDeps: MythicPlusPull
 
 Core.lua
 Config.lua
 MinimapButton.lua
 GroupView.lua
-PullPercentage.lua
-RightPanel.lua
+MythicPlusPanel.lua

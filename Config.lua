@@ -34,6 +34,18 @@ function Config:OnInit()
     end)
     panel.minimapCB = cb2
 
+    -- Hide Quests (Objective Tracker)
+    local cb3 = CreateFrame("CheckButton", "$parentHideQuestsCB", panel, "InterfaceOptionsCheckButtonTemplate")
+    cb3:SetPoint("TOPLEFT", cb2, "BOTTOMLEFT", 0, -8)
+    cb3.Text:SetText("Hide Quests")
+    cb3:SetScript("OnClick", function(self)
+        WowHealerUI_DB.hideQuests = self:GetChecked() and true or false
+        if WowHealerUI and WowHealerUI.ApplyObjectiveTrackerPreference then
+            WowHealerUI:ApplyObjectiveTrackerPreference()
+        end
+    end)
+    panel.hideQuestsCB = cb3
+
     -- Register with new Settings UI
     local category, layout = Settings.RegisterCanvasLayoutCategory(panel, "wow-healer-ui")
     category.ID = "wow-healer-ui"
@@ -45,6 +57,7 @@ function Config:OnLogin()
     if not panel then return end
     panel.enableCB:SetChecked(WowHealerUI:IsEnabled())
     panel.minimapCB:SetChecked(not WowHealerUI_DB.minimap.hide)
+    panel.hideQuestsCB:SetChecked(WowHealerUI_DB.hideQuests)
 end
 
 -- Slash command to open settings

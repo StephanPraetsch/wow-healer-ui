@@ -9,6 +9,7 @@ local defaults = {
         hide = false,
         pos = 225,
     },
+    hideQuests = true,
 }
 
 local function DeepCopy(src, dst)
@@ -48,6 +49,69 @@ function WowHealerUI:IsEnabled()
     return WowHealerUI_DB and WowHealerUI_DB.enabled
 end
 
+-- Objective Tracker suppression helpers
+local function reallyHideTracker()
+    if not ObjectiveTrackerFrame then return end
+    if ObjectiveTrackerFrame.UnregisterAllEvents then ObjectiveTrackerFrame:UnregisterAllEvents() end
+    ObjectiveTrackerFrame:Hide()
+end
+
+local function reallyShowTracker()
+    if not ObjectiveTrackerFrame then return end
+    ObjectiveTrackerFrame:Show()
+end
+
+-- Public API to apply current preference immediately
+function WowHealerUI:ApplyObjectiveTrackerPreference()
+    if WowHealerUI_DB and WowHealerUI_DB.hideQuests and WowHealerUI:IsEnabled() then
+        -- Schedule a few hides to beat layout churn
+        C_Timer.After(0, reallyHideTracker)
+        C_Timer.After(0.1, reallyHideTracker)
+        C_Timer.After(0.5, reallyHideTracker)
+    else
+        reallyShowTracker()
+    end
+end
+
+-- Initialize a robust suppressor that runs independent of panel updates
+function WowHealerUI:_InitObjectiveTrackerSuppressor()
+    if self._trackerSuppressor then return end
+
+    local sup = CreateFrame("Frame")
+    self._trackerSuppressor = sup
+
+    local function ensureHiddenIfEnabled()
+        if WowHealerUI_DB and WowHealerUI_DB.hideQuests and WowHealerUI:IsEnabled() then
+            C_Timer.After(0, reallyHideTracker)   -- next frame
+            C_Timer.After(0.1, reallyHideTracker) -- after initial layout
+            C_Timer.After(0.5, reallyHideTracker) -- after UI settles
+        end
+    end
+
+    sup:SetScript("OnEvent", function()
+        ensureHiddenIfEnabled()
+    end)
+
+    sup:RegisterEvent("PLAYER_LOGIN")
+    sup:RegisterEvent("PLAYER_ENTERING_WORLD")
+    sup:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+    sup:RegisterEvent("SCENARIO_UPDATE")
+    sup:RegisterEvent("SCENARIO_CRITERIA_UPDATE")
+
+    -- If the frame exists, hard-hook Show to keep it hidden when preference is ON
+    C_Timer.After(0, function()
+        if ObjectiveTrackerFrame and not sup._hooked then
+            sup._hooked = true
+            hooksecurefunc(ObjectiveTrackerFrame, "Show", function()
+                if WowHealerUI_DB and WowHealerUI_DB.hideQuests and WowHealerUI:IsEnabled() then
+                    reallyHideTracker()
+                end
+            end)
+            ensureHiddenIfEnabled()
+        end
+    end)
+end
+
 -- Event frame
 local f = CreateFrame("Frame")
 f:RegisterEvent("ADDON_LOADED")
@@ -68,6 +132,8 @@ f:SetScript("OnEvent", function(self, event, arg1, ...)
     elseif event == "PLAYER_LOGIN" then
         -- Enable/disable after login, show UI appropriately
         WowHealerUI:ForEachModule("OnLogin")
+        -- Ensure tracker preference is applied on login
+        WowHealerUI:ApplyObjectiveTrackerPreference()
 
     elseif event == "PLAYER_ENTERING_WORLD" then
         local isInitialLogin, isReload = ...
@@ -79,6 +145,8 @@ end)
 function WowHealerUI:ToggleEnabled(on)
     WowHealerUI_DB.enabled = on and true or false
     self:ForEachModule("OnEnableChanged", WowHealerUI_DB.enabled)
+    -- Re-apply objective tracker preference on toggle
+    self:ApplyObjectiveTrackerPreference()
 end
 
 -- Simple utility: role detection
@@ -169,55 +237,6 @@ function WowHealerUI:IsDangerousDebuff(unit)
         end
     end)
     return danger
-end
-
--- Objective Tracker suppression
-local function reallyHideTracker()
-    if not WowHealerUI:IsEnabled() then return end
-    local f = ObjectiveTrackerFrame
-    if not f then return end
-    if f.UnregisterAllEvents then f:UnregisterAllEvents() end
-    f:Hide()
-end
-
-function WowHealerUI:HideObjectiveTracker()
-    reallyHideTracker()
-end
-
--- Initialize a robust suppressor that runs independent of panel updates
-function WowHealerUI:_InitObjectiveTrackerSuppressor()
-    if self._trackerSuppressor then return end
-
-    local sup = CreateFrame("Frame")
-    self._trackerSuppressor = sup
-
-    local function ensureHidden()
-        C_Timer.After(0, reallyHideTracker)       -- next frame
-        C_Timer.After(0.1, reallyHideTracker)     -- after initial layout
-        C_Timer.After(0.5, reallyHideTracker)     -- after UI settles
-    end
-
-    sup:SetScript("OnEvent", function(_, event)
-        if not WowHealerUI:IsEnabled() then return end
-        ensureHidden()
-    end)
-
-    sup:RegisterEvent("PLAYER_LOGIN")
-    sup:RegisterEvent("PLAYER_ENTERING_WORLD")
-    sup:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-    sup:RegisterEvent("SCENARIO_UPDATE")
-    sup:RegisterEvent("SCENARIO_CRITERIA_UPDATE")
-
-    -- If the frame exists, hard-hook Show to keep it hidden
-    C_Timer.After(0, function()
-        if ObjectiveTrackerFrame and not sup._hooked then
-            sup._hooked = true
-            hooksecurefunc(ObjectiveTrackerFrame, "Show", function()
-                reallyHideTracker()
-            end)
-            ensureHidden()
-        end
-    end)
 end
 
 -- Expose icon path
