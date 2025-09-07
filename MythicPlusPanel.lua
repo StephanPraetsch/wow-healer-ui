@@ -217,22 +217,27 @@ local function UpdatePanel()
                 local pull = MMPE:GetPulledProgress()
                 local total = (current + pull)
                 local max = MMPE:GetMaxQuantity()
-                local currentPct = percentString:format((current / max) * 100)
-                local pullPct = percentString:format((pull / max) * 100)
-                local totalPct = percentString:format((total / max) * 100)
-                progressPercentageFS:SetText(currentPct .. " + " .. pullPct .. " = " .. totalPct)
+                if max and max > 0 then
+                    local currentPct = percentString:format((current / max) * 100)
+                    local pullPct = percentString:format((pull / max) * 100)
+                    local totalPct = percentString:format((total / max) * 100)
+                    progressPercentageFS:SetText(currentPct .. " + " .. pullPct .. " = " .. totalPct)
+                else
+                    progressPercentageFS:SetText(ProgressPercentage())
+                end
             else
                 progressPercentageFS:SetText(ProgressPercentage())
             end
         else
             titleFS:SetText(GetInstanceName())
+            activeSecondsFS:SetText("")
+            progressPercentageFS:SetText("")
         end
     else
         titleFS:SetText("")
         activeSecondsFS:SetText("")
         progressPercentageFS:SetText("")
     end
-
 end
 
 local function RefreshAllNameplates()
@@ -336,5 +341,4 @@ function Panel:OnInit()
     progressPercentageFS = FRAME:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     progressPercentageFS:SetPoint("TOPLEFT", 10, -48)
     progressPercentageFS:SetText("")
-
 end
