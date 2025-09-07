@@ -13,9 +13,125 @@ local H_SPACING, V_SPACING = 8, 4
 local FRAME_PADDING = 6 -- padding inside the surrounding frame
 local HEADER_OFFSET = 18 -- vertical space for the header
 
+-- ============================================================
+-- Role icon support (robust: atlas + texcoord fallback)
+-- ============================================================
+
+-- Detect whether SetAtlas("RoleIcon-Tank") is available
+local function WowUI_HasRoleAtlases()
+    local tex = UIParent:CreateTexture(nil, "OVERLAY")
+    local ok = pcall(tex.SetAtlas, tex, "RoleIcon-Tank", true)
+    tex:Hide()
+    tex:SetTexture(nil)
+    return ok
+end
+local USE_ROLE_ATLASES = WowUI_HasRoleAtlases()
+
+-- Fallback texcoords for UI-LFG-RoleIcons
+local ROLE_TEXCOORDS = {
+    TANK   = { left=0.5,  right=0.75, top=0.0,  bottom=0.25 },
+    HEALER = { left=0.75, right=1.0,  top=0.0,  bottom=0.25 },
+    DAMAGER= { left=0.25, right=0.5,  top=0.0,  bottom=0.25 },
+    DPS    = { left=0.25, right=0.5,  top=0.0,  bottom=0.25 },
+}
+
+-- Hard-forced sprite sheet + coords to guarantee a visible icon
+local function SetRoleIconTexture(tex, role)
+    if not tex then return false end
+    if role == "DAMAGER" then role = "DPS" end
+
+    tex:SetAlpha(1)
+    tex:SetDrawLayer("OVERLAY", 4)
+    tex:Show()
+
+    -- Clear any prior atlas state before switching
+    tex:SetAtlas(nil)
+
+    -- Preferred: the tiny role atlases used by Blizzard party/raid frames
+    local ok = false
+    if role == "TANK" then
+        ok = pcall(tex.SetAtlas, tex, "RoleIcon-Tiny-Tank", true)
+    elseif role == "HEALER" then
+        ok = pcall(tex.SetAtlas, tex, "RoleIcon-Tiny-Healer", true)
+    elseif role == "DPS" then
+        ok = pcall(tex.SetAtlas, tex, "RoleIcon-Tiny-DPS", true)
+    end
+    if ok then return true end
+
+    -- Fallback: larger atlases (if Tiny not present)
+    if role == "TANK" then
+        ok = pcall(tex.SetAtlas, tex, "RoleIcon-Tank", true)
+    elseif role == "HEALER" then
+        ok = pcall(tex.SetAtlas, tex, "RoleIcon-Healer", true)
+    elseif role == "DPS" then
+        ok = pcall(tex.SetAtlas, tex, "RoleIcon-DPS", true)
+    end
+    if ok then return true end
+
+    -- Final fallback: sprite sheet
+    if role == "DPS" then
+        tex:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-ROLES")
+        tex:SetTexCoord(0.00, 0.25, 0.00, 0.25)
+        return true
+    elseif role == "TANK" then
+        tex:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-ROLES")
+        tex:SetTexCoord(0.25, 0.50, 0.00, 0.25)
+        return true
+    elseif role == "HEALER" then
+        tex:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-ROLES")
+        tex:SetTexCoord(0.50, 0.75, 0.00, 0.25)
+        return true
+    end
+
+    tex:SetTexture(nil)
+    tex:Hide()
+    return false
+end
+
+-- Fallback: derive role from specialization if the assigned role is NONE/unknown
+local function GetEffectiveUnitRole(unit)
+    local role = UnitGroupRolesAssigned(unit)
+    if role and role ~= "NONE" then
+        return role
+    end
+
+    -- Player spec role
+    if UnitIsUnit(unit, "player") then
+        local getSpec = _G.GetSpecialization
+        local getRole = _G.GetSpecializationRole
+        if getSpec and getRole then
+            local spec = getSpec()
+            if spec then
+                local r = getRole(spec)
+                if r == "TANK" or r == "HEALER" or r == "DAMAGER" then
+                    return r
+                end
+            end
+        end
+        return "NONE"
+    end
+
+    -- Party/Raid: try inspect spec role (only works when inspect data is available)
+    local getInspectSpec = _G.GetInspectSpecialization
+    local getSpecInfoByID = _G.GetSpecializationInfoByID
+    if getInspectSpec and getSpecInfoByID then
+        local specID = getInspectSpec(unit)
+        if specID and specID > 0 then
+            local _, _, _, _, _, roleToken = getSpecInfoByID(specID)
+            if roleToken == "TANK" or roleToken == "HEALER" or roleToken == "DAMAGER" then
+                return roleToken
+            end
+        end
+    end
+
+    return "NONE"
+end
+
+-- ============================================================
 -- Sorting by role then name
+-- ============================================================
 local function RoleSort(u1, u2)
-    local prio = { TANK=1, HEALER=2, DAMAGER=3, NONE=4 }
+    local prio = { TANK=1, HEALER=2, DAMAGER=3, DPS=3, NONE=4 }
     local r1 = prio[WowHealerUI:GetUnitRole(u1)] or 4
     local r2 = prio[WowHealerUI:GetUnitRole(u2)] or 4
     if r1 ~= r2 then return r1 < r2 end
@@ -51,6 +167,9 @@ local function GetRaidGroupIndex(unit)
     return 1
 end
 
+-- ============================================================
+-- Item level (player-only native; others show "-" unless you add inspect)
+-- ============================================================
 local function GetUnitIlvl(unit)
     if UnitIsUnit(unit, "player") and GetAverageItemLevel then
         local overall, equipped = GetAverageItemLevel()
@@ -71,14 +190,9 @@ local function GetGroupTitle()
     end
 end
 
--- Map UnitGroupRolesAssigned() to role icon texcoords in UI-LFG-RoleIcons
-local ROLE_TEXCOORDS = {
-    TANK   = { left=0.5,  right=0.75, top=0.0,  bottom=0.25 },
-    HEALER = { left=0.75, right=1.0,  top=0.0,  bottom=0.25 },
-    DAMAGER= { left=0.25, right=0.5,  top=0.0,  bottom=0.25 },
-}
-
--- Raider.IO helpers
+-- ============================================================
+-- Raider.IO helpers (optional)
+-- ============================================================
 local function GetUnitFullName(unit)
     local name, realm = UnitName(unit)
     if not name then return nil end
@@ -115,8 +229,7 @@ local function GetRaiderIOScore(unit)
     return nil
 end
 
--- Colorize score like Raider.IO gradient. Simple thresholds:
--- Gray < Green < Blue < Purple < Orange
+-- Colorize score like Raider.IO simple thresholds
 local function ColorForRio(score)
     if not score or score <= 0 then return 0.7, 0.7, 0.7 end           -- gray
     if score < 1000 then return 0.2, 1.0, 0.2 end                       -- green
@@ -125,6 +238,9 @@ local function ColorForRio(score)
     return 1.0, 0.6, 0.2                                                -- orange
 end
 
+-- ============================================================
+-- UI: Create and update unit button
+-- ============================================================
 local function CreateUnitButton(parent)
     local b = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate,BackdropTemplate")
     b:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
@@ -134,27 +250,22 @@ local function CreateUnitButton(parent)
         edgeSize = 1,
         insets = { left = 0, right = 0, top = 0, bottom = 0 },
     })
-    -- fully transparent fill; we’ll paint our own class background
     b:SetBackdropColor(0,0,0,0.0)
     b:SetBackdropBorderColor(0.2,0.2,0.2,1)
 
     b:RegisterForClicks("AnyDown")
-    -- Interactions
-    b:SetAttribute("*type1", "target")  -- Left click: focus
+    b:SetAttribute("*type1", "target")
     b:SetAttribute("unit", nil)
 
-    -- Layered visuals
-    -- 1) Class background (subtle tint across entire cell)
+    -- Class background
     local classBG = b:CreateTexture(nil, "ARTWORK", nil, -8)
     classBG:SetAllPoints(true)
     classBG:SetColorTexture(1,1,1,0.20)
     b.classBG = classBG
 
-    -- 2) HP area: a wide strip with fill bar
+    -- HP strip
     local hpHeight = math.floor(BUTTON_HEIGHT * 0.6)
     local hpTopOffset = 3
-
-    -- Dark HP background strip
     local hpBG = b:CreateTexture(nil, "ARTWORK", nil, -6)
     hpBG:SetPoint("TOPLEFT", 6, -hpTopOffset)
     hpBG:SetPoint("RIGHT", -6, 0)
@@ -162,60 +273,56 @@ local function CreateUnitButton(parent)
     hpBG:SetColorTexture(0,0,0,0.35)
     b.hpBG = hpBG
 
-    -- HP fill (class-colored), we will adjust width by HP percentage
     local hpFill = b:CreateTexture(nil, "ARTWORK", nil, -5)
     hpFill:SetPoint("TOPLEFT", hpBG, "TOPLEFT", 0, 0)
     hpFill:SetPoint("BOTTOMLEFT", hpBG, "BOTTOMLEFT", 0, 0)
-    -- width set in UpdateUnitButton based on hp %
     hpFill:SetColorTexture(0.2, 0.8, 0.2, 0.95)
     b.hpFill = hpFill
 
-    -- Absorb overlay (shield) continues to the right of current HP
+    -- Absorb overlay
     local absorbFill = b:CreateTexture(nil, "OVERLAY", nil, -4)
     absorbFill:SetPoint("TOPLEFT", hpBG, "TOPLEFT", 0, 0)
     absorbFill:SetPoint("BOTTOMLEFT", hpBG, "BOTTOMLEFT", 0, 0)
-    absorbFill:SetColorTexture(1, 1, 1, 0.55) -- will be recolored per unit; semi-opaque, no background transparency below
+    absorbFill:SetColorTexture(1, 1, 1, 0.55)
     absorbFill:Hide()
     b.absorbFill = absorbFill
 
-    -- Optional edge to mark where absorb starts
     local absorbEdge = b:CreateTexture(nil, "OVERLAY", nil, -3)
     absorbEdge:SetSize(1, hpHeight)
     absorbEdge:SetColorTexture(1, 1, 1, 0.7)
     absorbEdge:Hide()
     b.absorbEdge = absorbEdge
 
-    -- Role icon (left side of the HP bar)
-    local roleTex = b:CreateTexture(nil, "OVERLAY")
-    roleTex:SetSize(14, 14)
-    roleTex:SetPoint("LEFT", hpBG, "LEFT", 2, 0)
-    roleTex:SetTexture("Interface\\LFGFrame\\UI-LFG-RoleIcons")
+    -- Role icon (above the backdrop)
+    local roleTex = b:CreateTexture(nil, "OVERLAY", nil, 5)
+    roleTex:SetSize(16, 16)
+    roleTex:SetPoint("LEFT", hpBG, "LEFT", 1, 0)
+    roleTex:SetAlpha(1)
     b.roleTex = roleTex
 
-    -- Name inside HP bar (left, after role)
+    -- Name
     local nameFS = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     nameFS:SetPoint("LEFT", roleTex, "RIGHT", 3, 0)
     nameFS:SetText("")
     b.nameFS = nameFS
 
-    -- Right side text inside HP bar: "<ilvl>  <rio>"
+    -- Right-side text
     local rightFS = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     rightFS:SetPoint("RIGHT", hpBG, "RIGHT", -4, 0)
     rightFS:SetText("")
     b.rightFS = rightFS
 
-    -- 3) Resource bar: thin strip below HP bar (no transparency background)
+    -- Resource bar
     local resBar = CreateFrame("StatusBar", nil, b)
     resBar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
     resBar:SetPoint("TOPLEFT", hpBG, "BOTTOMLEFT", 0, -2)
     resBar:SetPoint("RIGHT", hpBG, "RIGHT", 0, 0)
     resBar:SetHeight(math.floor(BUTTON_HEIGHT * 0.18))
     resBar:SetMinMaxValues(0,1)
-    -- Opaque solid background underneath
     local resBG = b:CreateTexture(nil, "ARTWORK", nil, -6)
     resBG:SetPoint("TOPLEFT", resBar, "TOPLEFT", 0, 0)
     resBG:SetPoint("BOTTOMRIGHT", resBar, "BOTTOMRIGHT", 0, 0)
-    resBG:SetColorTexture(0,0,0,1) -- opaque black
+    resBG:SetColorTexture(0,0,0,1)
     b.resBar = resBar
 
     -- Hover highlight
@@ -234,7 +341,7 @@ local function CreateUnitButton(parent)
         GameTooltip:Hide()
     end)
 
-    -- Move panel by dragging any cell with Shift+Left
+    -- Dragging
     b:EnableMouse(true)
     b:SetMovable(true)
     b:SetScript("OnMouseDown", function(self, button)
@@ -257,12 +364,16 @@ local function CreateUnitButton(parent)
 end
 
 local function UpdateRoleIcon(b, unit)
-    local role = UnitGroupRolesAssigned(unit)
-    if role and ROLE_TEXCOORDS[role] then
-        local tc = ROLE_TEXCOORDS[role]
-        b.roleTex:Show()
-        b.roleTex:SetTexCoord(tc.left, tc.right, tc.top, tc.bottom)
-    else
+    if not unit or not UnitExists(unit) then
+        b.roleTex:SetTexture(nil)
+        b.roleTex:Hide()
+        if b.roleBG then b.roleBG:Hide() end
+        return
+    end
+    if b.roleBG then b.roleBG:Show() end
+    local role = GetEffectiveUnitRole(unit) or "NONE"
+    if not SetRoleIconTexture(b.roleTex, role) then
+        b.roleTex:SetTexture(nil)
         b.roleTex:Hide()
     end
 end
@@ -320,18 +431,16 @@ local function UpdateUnitButton(b)
     b.hpFill:SetPoint("BOTTOMLEFT", b.hpBG, "BOTTOMLEFT", 0, 0)
     b.hpFill:SetWidth(hpWidth)
 
-    -- Absorbs overlay (shield)
+    -- Absorbs overlay
     local absorbs = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0
     if absorbs and absorbs > 0 then
         local absPerc = absorbs / hpMax
         local absWidth = math.floor(bgWidth * absPerc + 0.5)
         local startX = hpWidth
         if startX < bgWidth and absWidth > 0 then
-            -- Clamp to bar
             if startX + absWidth > bgWidth then
                 absWidth = bgWidth - startX
             end
-            -- Lightened class color for shield
             b.absorbFill:SetColorTexture(math.min(1, r + 0.25), math.min(1, g + 0.25), math.min(1, bl + 0.25), 0.55)
             b.absorbFill:ClearAllPoints()
             b.absorbFill:SetPoint("TOPLEFT", b.hpBG, "TOPLEFT", startX, 0)
@@ -381,6 +490,9 @@ local function UpdateUnitButton(b)
     b:SetAttribute("unit", unit)
 end
 
+-- ============================================================
+-- Layout and refresh
+-- ============================================================
 local function LayoutGroup(units)
     for _, b in ipairs(UNIT_BUTTONS) do
         b:Hide()
@@ -460,7 +572,6 @@ local function RefreshAll()
     end
     ROOT:Show()
 
-    -- Update header
     if ROOT.headerFS then
         ROOT.headerFS:SetText(GetGroupTitle())
     end
@@ -469,6 +580,9 @@ local function RefreshAll()
     LayoutGroup(units)
 end
 
+-- ============================================================
+-- Lifecycle and events
+-- ============================================================
 function GroupView:OnInit()
     ROOT = CreateFrame("Frame", "WowHealerUIGroupView", UIParent, "BackdropTemplate")
     ROOT:SetBackdrop({
@@ -535,6 +649,14 @@ function GroupView:OnInit()
                 end
             end
         else
+            -- For roster/spec/role changes, ensure icons refresh quickly
+            if event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "ROLE_CHANGED_INFORM" or event == "PLAYER_ENTERING_WORLD" then
+                for _, b in ipairs(UNIT_BUTTONS) do
+                    if b:IsShown() and b.unit then
+                        UpdateRoleIcon(b, b.unit)
+                    end
+                end
+            end
             RefreshAll()
         end
     end)
