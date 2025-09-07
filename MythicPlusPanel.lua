@@ -51,7 +51,8 @@ local function ShouldShowNameplateTexts()
 end
 
 local function ShowPanel()
-    return IsMythicPlus() and WowHealerUI:IsEnabled()
+    local inInstance, instType = IsInInstance()
+    return (inInstance and instType == "party") and WowHealerUI:IsEnabled()
 end
 
 local function GetNPCID(guid)
@@ -198,6 +199,8 @@ local function GetKeyLevel()
 end
 
 local function GetInstanceName()
+    local inInstance = IsInInstance()
+    if not inInstance then return nil end
     return select(1, GetInstanceInfo())
 end
 
@@ -207,37 +210,43 @@ local function UpdatePanel()
         return
     end
     FRAME:Show()
-    if IsMythicPlus() then
-        local level = GetKeyLevel()
-        if level and level > 0 then
-            titleFS:SetText(string.format("%s +%d", GetInstanceName(), level))
-            activeSecondsFS:SetText(GetActiveKeySecondsText())
-            if IsMMPELoaded() then
-                local current = MMPE:GetCurrentQuantity()
-                local pull = MMPE:GetPulledProgress()
-                local total = (current + pull)
-                local max = MMPE:GetMaxQuantity()
-                if max and max > 0 then
-                    local currentPct = percentString:format((current / max) * 100)
-                    local pullPct = percentString:format((pull / max) * 100)
-                    local totalPct = percentString:format((total / max) * 100)
-                    progressPercentageFS:SetText(currentPct .. " + " .. pullPct .. " = " .. totalPct)
-                else
-                    progressPercentageFS:SetText(ProgressPercentage())
-                end
+
+    local instName = GetInstanceName() or ""
+    local level = GetKeyLevel()
+    local mapID = C_ChallengeMode.GetActiveChallengeMapID()
+
+    if not mapID then
+        titleFS:SetText(instName)
+        activeSecondsFS:SetText("")
+        progressPercentageFS:SetText("")
+        return
+    end
+
+    if level and level > 0 then
+        titleFS:SetText(string.format("%s +%d", instName, level))
+        activeSecondsFS:SetText(GetActiveKeySecondsText())
+        if IsMMPELoaded() then
+            local current = MMPE:GetCurrentQuantity()
+            local pull = MMPE:GetPulledProgress()
+            local total = (current + pull)
+            local max = MMPE:GetMaxQuantity()
+            if max and max > 0 then
+                local currentPct = percentString:format((current / max) * 100)
+                local pullPct = percentString:format((pull / max) * 100)
+                local totalPct = percentString:format((total / max) * 100)
+                progressPercentageFS:SetText(currentPct .. " + " .. pullPct .. " = " .. totalPct)
             else
                 progressPercentageFS:SetText(ProgressPercentage())
             end
         else
-            titleFS:SetText(GetInstanceName())
-            activeSecondsFS:SetText("")
-            progressPercentageFS:SetText("")
+            progressPercentageFS:SetText(ProgressPercentage())
         end
-    else
-        titleFS:SetText("")
-        activeSecondsFS:SetText("")
-        progressPercentageFS:SetText("")
+        return
     end
+
+    titleFS:SetText(instName)
+    activeSecondsFS:SetText("")
+    progressPercentageFS:SetText("")
 end
 
 local function RefreshAllNameplates()
@@ -320,6 +329,10 @@ function Panel:OnInit()
         end
     end)
 
+    FRAME:RegisterEvent("PLAYER_ENTERING_WORLD")
+    FRAME:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+    FRAME:RegisterEvent("SCENARIO_UPDATE")
+    FRAME:RegisterEvent("SCENARIO_CRITERIA_UPDATE")
     FRAME:RegisterEvent("NAME_PLATE_UNIT_ADDED")
     FRAME:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
     FRAME:SetScript("OnEvent", function(_, event, unit)
@@ -327,6 +340,11 @@ function Panel:OnInit()
             OnAddNameplate(unit)
         elseif event == "NAME_PLATE_UNIT_REMOVED" then
             OnRemoveNameplate(unit)
+        elseif event == "PLAYER_ENTERING_WORLD"
+                or event == "ZONE_CHANGED_NEW_AREA"
+                or event == "SCENARIO_UPDATE"
+                or event == "SCENARIO_CRITERIA_UPDATE" then
+            UpdatePanel()
         end
     end)
 
