@@ -232,6 +232,20 @@ local function ColorForRio(score)
 end
 
 -- ============================================================
+-- Range helper + throttle for live updates
+-- ============================================================
+local function IsUnitInRange(unit)
+    local inRange, checked = UnitInRange(unit)
+    if checked == false then
+        return true -- avoid initial flicker
+    end
+    return inRange == true
+end
+
+local RANGE_THROTTLE = 0.2
+local rangeTickerElapsed = 0
+
+-- ============================================================
 -- UI: Create and update unit button
 -- ============================================================
 local function CreateUnitButton(parent)
@@ -481,6 +495,32 @@ local function UpdateUnitButton(b)
 
     -- Secure attribute for mouseover/target/focus
     b:SetAttribute("unit", unit)
+
+    -- Grey out when out of range (initial/event-driven application)
+    local inRange = IsUnitInRange(unit)
+    local alphaIn, alphaOut = 1.0, 0.45
+
+    if inRange then
+        b:SetAlpha(alphaIn)
+        b.nameFS:SetTextColor(1, 1, 1)
+        b.rightFS:SetAlpha(1)
+        b.classBG:SetAlpha(0.20)
+        b.hpBG:SetColorTexture(0,0,0,0.35)
+        if b.resBar then b.resBar:SetAlpha(1) end
+        if b.roleTex then b.roleTex:SetAlpha(1) end
+        if b.absorbFill then b.absorbFill:SetAlpha(0.55) end
+        if b.absorbEdge then b.absorbEdge:SetAlpha(0.7) end
+    else
+        b:SetAlpha(alphaOut)
+        b.nameFS:SetTextColor(0.7, 0.7, 0.7)
+        b.rightFS:SetAlpha(0.7)
+        b.classBG:SetAlpha(0.12)
+        b.hpBG:SetColorTexture(0,0,0,0.25)
+        if b.resBar then b.resBar:SetAlpha(0.6) end
+        if b.roleTex then b.roleTex:SetAlpha(0.6) end
+        if b.absorbFill then b.absorbFill:SetAlpha(0.35) end
+        if b.absorbEdge then b.absorbEdge:SetAlpha(0.45) end
+    end
 end
 
 -- ============================================================
@@ -651,6 +691,46 @@ function GroupView:OnInit()
                 end
             end
             RefreshAll()
+        end
+    end)
+
+    -- Live range ticker (smooth grey in/out while moving)
+    ROOT:SetScript("OnUpdate", function(self, elapsed)
+        rangeTickerElapsed = rangeTickerElapsed + elapsed
+        if rangeTickerElapsed < RANGE_THROTTLE then return end
+        rangeTickerElapsed = 0
+
+        for _, b in ipairs(UNIT_BUTTONS) do
+            if b:IsShown() and b.unit and UnitExists(b.unit) then
+                local inRange = IsUnitInRange(b.unit)
+                local alphaIn, alphaOut = 1.0, 0.45
+
+                if inRange then
+                    if b:GetAlpha() ~= alphaIn then
+                        b:SetAlpha(alphaIn)
+                        b.nameFS:SetTextColor(1, 1, 1)
+                        b.rightFS:SetAlpha(1)
+                        b.classBG:SetAlpha(0.20)
+                        b.hpBG:SetColorTexture(0,0,0,0.35)
+                        if b.resBar then b.resBar:SetAlpha(1) end
+                        if b.roleTex then b.roleTex:SetAlpha(1) end
+                        if b.absorbFill then b.absorbFill:SetAlpha(0.55) end
+                        if b.absorbEdge then b.absorbEdge:SetAlpha(0.7) end
+                    end
+                else
+                    if b:GetAlpha() ~= alphaOut then
+                        b:SetAlpha(alphaOut)
+                        b.nameFS:SetTextColor(0.7, 0.7, 0.7)
+                        b.rightFS:SetAlpha(0.7)
+                        b.classBG:SetAlpha(0.12)
+                        b.hpBG:SetColorTexture(0,0,0,0.25)
+                        if b.resBar then b.resBar:SetAlpha(0.6) end
+                        if b.roleTex then b.roleTex:SetAlpha(0.6) end
+                        if b.absorbFill then b.absorbFill:SetAlpha(0.35) end
+                        if b.absorbEdge then b.absorbEdge:SetAlpha(0.45) end
+                    end
+                end
+            end
         end
     end)
 
