@@ -115,14 +115,13 @@ local function GetRaiderIOScore(unit)
     return nil
 end
 
--- Colorize score like Raider.IO gradient. Thresholds approximate typical brackets.
+-- Colorize score like Raider.IO gradient. Simple thresholds:
 -- Gray < Green < Blue < Purple < Orange
 local function ColorForRio(score)
     if not score or score <= 0 then return 0.7, 0.7, 0.7 end           -- gray
     if score < 1000 then return 0.2, 1.0, 0.2 end                       -- green
     if score < 1500 then return 0.2, 0.6, 1.0 end                       -- blue
-    if score < 2200 then return 0.7, 0.4, 1.0 end                        -- purple (~2064 lands here)
-    -- high
+    if score < 2200 then return 0.7, 0.4, 1.0 end                        -- purple
     return 1.0, 0.6, 0.2                                                -- orange
 end
 
@@ -171,6 +170,21 @@ local function CreateUnitButton(parent)
     hpFill:SetColorTexture(0.2, 0.8, 0.2, 0.95)
     b.hpFill = hpFill
 
+    -- Absorb overlay (shield) continues to the right of current HP
+    local absorbFill = b:CreateTexture(nil, "OVERLAY", nil, -4)
+    absorbFill:SetPoint("TOPLEFT", hpBG, "TOPLEFT", 0, 0)
+    absorbFill:SetPoint("BOTTOMLEFT", hpBG, "BOTTOMLEFT", 0, 0)
+    absorbFill:SetColorTexture(1, 1, 1, 0.55) -- will be recolored per unit; semi-opaque, no background transparency below
+    absorbFill:Hide()
+    b.absorbFill = absorbFill
+
+    -- Optional edge to mark where absorb starts
+    local absorbEdge = b:CreateTexture(nil, "OVERLAY", nil, -3)
+    absorbEdge:SetSize(1, hpHeight)
+    absorbEdge:SetColorTexture(1, 1, 1, 0.7)
+    absorbEdge:Hide()
+    b.absorbEdge = absorbEdge
+
     -- Role icon (left side of the HP bar)
     local roleTex = b:CreateTexture(nil, "OVERLAY")
     roleTex:SetSize(14, 14)
@@ -184,24 +198,24 @@ local function CreateUnitButton(parent)
     nameFS:SetText("")
     b.nameFS = nameFS
 
-    -- Right side text inside HP bar: "<ilvl> <rio>"
+    -- Right side text inside HP bar: "<ilvl>  <rio>"
     local rightFS = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     rightFS:SetPoint("RIGHT", hpBG, "RIGHT", -4, 0)
     rightFS:SetText("")
     b.rightFS = rightFS
 
-    -- 3) Resource bar: thin strip below HP bar
+    -- 3) Resource bar: thin strip below HP bar (no transparency background)
     local resBar = CreateFrame("StatusBar", nil, b)
     resBar:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
     resBar:SetPoint("TOPLEFT", hpBG, "BOTTOMLEFT", 0, -2)
     resBar:SetPoint("RIGHT", hpBG, "RIGHT", 0, 0)
     resBar:SetHeight(math.floor(BUTTON_HEIGHT * 0.18))
     resBar:SetMinMaxValues(0,1)
-    resBar:SetStatusBarColor(0.1,0.4,1.0)
+    -- Opaque solid background underneath
     local resBG = b:CreateTexture(nil, "ARTWORK", nil, -6)
     resBG:SetPoint("TOPLEFT", resBar, "TOPLEFT", 0, 0)
     resBG:SetPoint("BOTTOMRIGHT", resBar, "BOTTOMRIGHT", 0, 0)
-    resBG:SetColorTexture(0,0,0,1)
+    resBG:SetColorTexture(0,0,0,1) -- opaque black
     b.resBar = resBar
 
     -- Hover highlight
@@ -280,21 +294,18 @@ local function UpdateUnitButton(b)
     local rio = GetRaiderIOScore(unit)
     local ilvlText = ilvl and tostring(ilvl) or "-"
     local rioText = rio and tostring(math.floor(rio + 0.5)) or "-"
-    b.rightFS:SetText(ilvlText .. "  " .. rioText)
-
     if rio then
         local cr, cg, cb = ColorForRio(rio)
-        -- color only the rio portion using inline color codes
-        -- Build as "|cAARRGGBB<ilvl>|r  |cAARRGGBB<rio>|r"
         local function hex(x) return string.format("%02X", math.floor(x * 255 + 0.5)) end
         local colRio = "|cff" .. hex(cr) .. hex(cg) .. hex(cb) .. rioText .. "|r"
         local colIlvl = "|cffffffff" .. ilvlText .. "|r"
         b.rightFS:SetText(colIlvl .. "  " .. colRio)
     else
+        b.rightFS:SetText(ilvlText .. "  " .. rioText)
         b.rightFS:SetTextColor(1,1,1)
     end
 
-    -- Health as width fill percent
+    -- Health percent
     local hp = UnitHealth(unit) or 0
     local hpMax = UnitHealthMax(unit) or 1
     if hpMax <= 0 then hpMax = 1 end
@@ -303,11 +314,43 @@ local function UpdateUnitButton(b)
 
     -- Resize hpFill to a fraction of hpBG width
     local bgWidth = b.hpBG:GetWidth() > 0 and b.hpBG:GetWidth() or (BUTTON_WIDTH - 12)
-    local fillWidth = math.floor(bgWidth * hpPerc + 0.5)
+    local hpWidth = math.floor(bgWidth * hpPerc + 0.5)
     b.hpFill:ClearAllPoints()
     b.hpFill:SetPoint("TOPLEFT", b.hpBG, "TOPLEFT", 0, 0)
     b.hpFill:SetPoint("BOTTOMLEFT", b.hpBG, "BOTTOMLEFT", 0, 0)
-    b.hpFill:SetWidth(fillWidth)
+    b.hpFill:SetWidth(hpWidth)
+
+    -- Absorbs overlay (shield)
+    local absorbs = UnitGetTotalAbsorbs and UnitGetTotalAbsorbs(unit) or 0
+    if absorbs and absorbs > 0 then
+        local absPerc = absorbs / hpMax
+        local absWidth = math.floor(bgWidth * absPerc + 0.5)
+        local startX = hpWidth
+        if startX < bgWidth and absWidth > 0 then
+            -- Clamp to bar
+            if startX + absWidth > bgWidth then
+                absWidth = bgWidth - startX
+            end
+            -- Lightened class color for shield
+            b.absorbFill:SetColorTexture(math.min(1, r + 0.25), math.min(1, g + 0.25), math.min(1, bl + 0.25), 0.55)
+            b.absorbFill:ClearAllPoints()
+            b.absorbFill:SetPoint("TOPLEFT", b.hpBG, "TOPLEFT", startX, 0)
+            b.absorbFill:SetPoint("BOTTOMLEFT", b.hpBG, "BOTTOMLEFT", startX, 0)
+            b.absorbFill:SetWidth(absWidth)
+            b.absorbFill:Show()
+
+            b.absorbEdge:ClearAllPoints()
+            b.absorbEdge:SetPoint("TOPLEFT", b.hpBG, "TOPLEFT", startX - 1, 0)
+            b.absorbEdge:SetPoint("BOTTOMLEFT", b.hpBG, "BOTTOMLEFT", startX - 1, 0)
+            b.absorbEdge:Show()
+        else
+            b.absorbFill:Hide()
+            b.absorbEdge:Hide()
+        end
+    else
+        b.absorbFill:Hide()
+        b.absorbEdge:Hide()
+    end
 
     -- Resource
     local ptype = UnitPowerType(unit)
